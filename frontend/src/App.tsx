@@ -1,15 +1,15 @@
 import React from 'react';
 import { Box, Container } from '@mui/material';
-import AppRoutes from './routes/AppRoutes';
-import TopAppBar from './components/layout/TopAppBar'; // Assuming a simple AppBar component exists
+import AppRoutes from './routes/AppRoutes'; // Importa tus rutas
+import TopAppBar from './components/layout/TopAppBar'; // Importa tu barra de navegación
 
 function App() {
-  // Basic Layout Structure
+  // Estructura básica del Layout
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopAppBar />
+      <TopAppBar /> {/* Renderiza la barra de navegación */}
       <Container component="main" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
-         {/* Routes will be rendered here */}
+         {/* Aquí se renderizará el componente de la ruta actual */}
          <AppRoutes />
       </Container>
       {/* Optional Footer */}
