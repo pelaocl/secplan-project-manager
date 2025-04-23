@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+      "target": "ES2016", // Or newer
+      "module": "CommonJS", // Standard for Node.js
+      "outDir": "./dist",
+      "rootDir": "./src",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "resolveJsonModule": true,
+      "baseUrl": "./src", // Allows absolute imports from src
+      "paths": {
+        "@/*": ["*"] // Example alias if needed
+      }
+      // "emitDecoratorMetadata": true, // Needed for TypeGraphQL or similar
+      // "experimentalDecorators": true // Needed for TypeGraphQL or similar
+    },
+    "include": ["src/**/*"], // Files to include in compilation
+    "exclude": ["node_modules", "dist", "prisma/seed.ts"] // Exclude seed from main build if run separately
+  }

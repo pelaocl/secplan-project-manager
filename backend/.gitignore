@@ -1,0 +1,50 @@
+# Dependencias de Node
+node_modules/
+
+# Archivos de Build (salida de TypeScript)
+dist/
+
+# Variables de Entorno
+# Ignora todos los .env excepto el de ejemplo
+.env*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Archivos de Prisma
+# ¡IMPORTANTE! NO ignores la carpeta 'migrations' ni 'schema.prisma'
+# Éstos DEBEN estar en el control de versiones.
+# El cliente generado dentro de node_modules ya está ignorado por la regla de node_modules.
+# Si generas el cliente en otro lugar (ej. src/generated), considera ignorarlo:
+# src/generated/
+
+# Archivos temporales del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración de IDEs/Editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Archivos de caché y reportes
+coverage/
+.nyc_output/
+.npm/
+
+# Archivos específicos de Windows
+desktop.ini
+
+# Archivos de paquetes compilados (si aplica)
+*.tsbuildinfo

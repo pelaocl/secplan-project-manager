@@ -1,0 +1,53 @@
+# Dependencias de Node
+node_modules/
+
+# Archivos de Build (salida de Vite)
+dist/
+out/
+build/
+.output/
+
+# Variables de Entorno
+.env*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Archivos de caché de Vite y dependencias pre-empaquetadas
+.vite/
+# Generado por Vite v2.8+ al pre-empaquetar dependencias
+node_modules/.vite/
+
+# Archivos temporales del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración de IDEs/Editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Archivos de caché y reportes
+coverage/
+.nyc_output/
+.npm/
+# Nuxt directories (si se usara Nuxt)
+.nuxt/
+.output/
+
+# Archivos específicos de Windows
+desktop.ini
+
+# Archivos de paquetes compilados (si aplica)
+*.tsbuildinfo

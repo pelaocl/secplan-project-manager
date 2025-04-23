@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+enum Role {
+  ADMIN
+  COORDINADOR
+  USUARIO
+  VISITANTE // Implicitamente no tiene registro en User, pero útil para lógica
+}
+
+enum TipoMoneda {
+  CLP
+  UF
+}
+
+// --- MODELS ---
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String   // Hashed password
+  name      String?
+  role      Role     @default(USUARIO)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  etiquetas        Etiqueta[] @relation("UserEtiquetas")
+  proyectosCreados Project[]  @relation("ProyectistaProjects")
+  proyectosFormulados Project[] @relation("FormuladorProjects")
+  proyectosColabora Project[]  @relation("ProjectCollaborators")
+  tareasAsignadas Tarea[]    // Para futura bitácora
+
+  @@map("users") // Renombra la tabla en la BD
+}
+
+model Etiqueta {
+  id    Int     @id @default(autoincrement())
+  nombre String  @unique
+  color String  // ej. Hex color code '#RRGGBB'
+
+  // Relaciones
+  usuarios User[] @relation("UserEtiquetas")
+
+  @@map("etiquetas")
+}
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  codigoUnico String   @unique // Generado: [ABR_TIPOLOGIA]-[CORRELATIVO]
+  nombre      String
+  descripcion String?  // Interno
+  direccion   String?
+  superficieTerreno Float? // m²
+  superficieEdificacion Float? // m² (nullable)
+  ano         Int?     // Año iniciativa
+  proyectoPriorizado Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones Información Básica
+  estadoId    Int?
+  estado      EstadoProyecto? @relation(fields: [estadoId], references: [id])
+  unidadId    Int?
+  unidad      UnidadMunicipal? @relation(fields: [unidadId], references: [id])
+  tipologiaId Int // Requerida
+  tipologia   TipologiaProyecto @relation(fields: [tipologiaId], references: [id])
+  sectorId    Int?
+  sector      Sector? @relation(fields: [sectorId], references: [id])
+
+  // Relaciones Equipo (Interno)
+  proyectistaId Int?
+  proyectista User? @relation("ProyectistaProjects", fields: [proyectistaId], references: [id])
+  formuladorId Int?
+  formulador  User? @relation("FormuladorProjects", fields: [formuladorId], references: [id])
+  colaboradores User[] @relation("ProjectCollaborators") // Many-to-Many implícita por Prisma
+
+  // Relaciones Información Financiera (Interno)
+  lineaFinanciamientoId Int?
+  lineaFinanciamiento   LineaFinanciamiento? @relation(fields: [lineaFinanciamientoId], references: [id])
+  programaId            Int?
+  programa              Programa? @relation(fields: [programaId], references: [id])
+  etapaFinanciamientoId Int?
+  etapaActualFinanciamiento EtapaFinanciamiento? @relation(fields: [etapaFinanciamientoId], references: [id])
+  monto                 Decimal? @db.Decimal(15, 2)
+  tipoMoneda            TipoMoneda @default(CLP)
+  codigoExpediente      String?
+  fechaPostulacion      DateTime? @db.Date // Guardar solo fecha
+  montoAdjudicado       Decimal? @db.Decimal(15, 2)
+  codigoLicitacion      String?
+
+  // Relaciones futuras
+  tareas Tarea[] // Para bitácora
+
+  // Campos Geometría (Excluidos Inicialmente)
+  // location_point    Geometry?
+  // area_polygon      Geometry?
+
+  @@map("proyectos")
+}
+
+// --- Lookup Tables ---
+
+model EstadoProyecto {
+  id      Int       @id @default(autoincrement())
+  nombre  String    @unique
+  proyectos Project[]
+
+  @@map("estados_proyecto")
+}
+
+model UnidadMunicipal {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique
+  abreviacion String    @unique
+  proyectos   Project[]
+
+  @@map("unidades_municipales")
+}
+
+model TipologiaProyecto {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique
+  abreviacion String    @unique // Usada para codigoUnico
+  colorChip   String    // ej. Hex color code '#RRGGBB'
+  proyectos   Project[]
+
+  @@map("tipologias_proyecto")
+}
+
+model Sector {
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  proyectos Project[]
+
+  @@map("sectores")
+}
+
+model LineaFinanciamiento {
+  id          Int        @id @default(autoincrement())
+  nombre      String     @unique
+  proyectos   Project[]
+  programas   Programa[]
+
+  @@map("lineas_financiamiento")
+}
+
+model Programa {
+  id        Int       @id @default(autoincrement())
+  nombre    String
+  lineaFinanciamientoId Int
+  lineaFinanciamiento LineaFinanciamiento @relation(fields: [lineaFinanciamientoId], references: [id])
+  proyectos Project[]
+
+  @@unique([nombre, lineaFinanciamientoId])
+  @@map("programas")
+}
+
+model EtapaFinanciamiento {
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  proyectos Project[]
+
+  @@map("etapas_financiamiento")
+}
+
+// Modelo Básico para futura Bitácora
+model Tarea {
+  id          Int      @id @default(autoincrement())
+  titulo      String
+  descripcion String?
+  fechaPlazo  DateTime?
+  completada  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  proyectoId  Int
+  proyecto    Project  @relation(fields: [proyectoId], references: [id], onDelete: Cascade) // Borrar tareas si se borra el proyecto
+
+  asignadoId  Int?
+  asignado    User?    @relation(fields: [asignadoId], references: [id])
+
+  @@map("tareas_bitacora")
+}
