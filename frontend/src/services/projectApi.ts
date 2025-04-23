@@ -12,7 +12,7 @@ export interface PaginatedProjectsResponse {
 
 /**
  * Obtiene una lista paginada de proyectos desde la API.
- * @param params Opcional: Objeto URLSearchParams o un objeto simple para filtros y paginación (ej. { page: 1, limit: 10, estadoId: 3 })
+ * @param params Opcional: Objeto URLSearchParams o un objeto simple para filtros y paginación
  */
 async function fetchProjects(params?: URLSearchParams | Record<string, any>): Promise<PaginatedProjectsResponse> {
     let queryString = '';
@@ -20,18 +20,12 @@ async function fetchProjects(params?: URLSearchParams | Record<string, any>): Pr
         if (params instanceof URLSearchParams) {
             queryString = `?${params.toString()}`;
         } else {
-            // Convierte un objeto simple a query string si es necesario
             queryString = `?${new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '').map(([key, value]) => [key, String(value)])).toString()}`;
         }
     }
-
-    console.log(`Workspaceing projects with query: ${queryString}`); // Log para depuración
-
-    // Llama al método get del apiService, especificando el tipo de respuesta esperado
-    // apiService añadirá automáticamente el token si el usuario está logueado
+    console.log(`Workspaceing projects with query: ${queryString}`);
+    // apiService añade el token si el usuario está logueado
     const data = await apiService.get<PaginatedProjectsResponse>(`/projects${queryString}`);
-
-    // Devuelve los datos recibidos (ya parseados por apiService)
     return data;
 }
 
@@ -39,16 +33,20 @@ async function fetchProjects(params?: URLSearchParams | Record<string, any>): Pr
  * Obtiene un único proyecto por su ID.
  * @param id El ID del proyecto a obtener.
  */
+// --- FUNCIÓN NUEVA ---
 async function getProjectById(id: number | string): Promise<Project> {
     console.log(`Workspaceing project with ID: ${id}`);
+    // apiService añade el token si el usuario está logueado, obteniendo datos completos si es posible
     const data = await apiService.get<Project>(`/projects/${id}`);
+    // apiService lanzará ApiError si no se encuentra (404) o hay otro error
     return data;
 }
+// --- FIN FUNCIÓN NUEVA ---
 
 
 // Exporta las funciones de la API de proyectos
 export const projectApi = {
     fetchProjects,
-    getProjectById,
+    getProjectById, // <-- Exporta la nueva función
     // Aquí añadirías createProject, updateProject, deleteProject después
 };

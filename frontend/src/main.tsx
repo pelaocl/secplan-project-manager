@@ -5,6 +5,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import App from './App';
 import theme from './theme/theme'; // Asegúrate que theme.ts exista y exporte un tema
 import './index.css'; // Asegúrate que index.css exista
+import 'leaflet/dist/leaflet.css';
 
 // Obtiene el elemento raíz (debe existir en index.html)
 const rootElement = document.getElementById('root');
