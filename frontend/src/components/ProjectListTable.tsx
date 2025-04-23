@@ -7,75 +7,83 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Paper, // Para envolver la tabla con un fondo y sombra
+    Paper,
     Chip,
     Typography
 } from '@mui/material';
 import { Project } from '../../types'; // Ajusta la ruta si es necesario
 
-// Propiedades que espera el componente (solo necesita los proyectos ahora)
+// Propiedades que espera el componente
 interface ProjectListTableProps {
   projects: Project[];
-  // Ya no pasamos loading, se maneja en la página padre
+  // *** NUEVO: Prop para saber si el usuario está autenticado ***
+  isAuthenticated: boolean;
+  // Ya no pasamos loading aquí
 }
 
-function ProjectListTable({ projects }: ProjectListTableProps) {
-  // Log para verificar las props (podemos quitarlo después)
-  console.log("ProjectListTable (MUI Table version) received props:", { projects });
+// Definición de Cabeceras (constante fuera del componente)
+const headCells = [
+    { id: 'codigoUnico', label: 'Código', align: 'left' },
+    { id: 'nombre', label: 'Nombre Proyecto', align: 'left' },
+    { id: 'tipologia', label: 'Tipología', align: 'left' },
+    { id: 'estado', label: 'Estado', align: 'left' },
+    { id: 'unidad', label: 'Unidad', align: 'left' },
+    { id: 'proyectista', label: 'Proyectista', align: 'left' }, // Mantenemos la cabecera
+    { id: 'ano', label: 'Año', align: 'right' },
+];
 
-  // Si no hay proyectos (aunque la página padre ya debería manejarlo)
+function ProjectListTable({ projects, isAuthenticated }: ProjectListTableProps) {
+  console.log("ProjectListTable received props:", { projects, isAuthenticated });
+
   if (!projects || projects.length === 0) {
+     // La página padre ya no debería renderizar esto si no hay proyectos
+     // pero lo dejamos como una doble seguridad.
     return <Typography sx={{ mt: 2 }}>No hay proyectos para mostrar.</Typography>;
   }
 
   return (
-    <TableContainer component={Paper} sx={{ mt: 2 }}> {/* Envuelve en Paper para estilo */}
+    <TableContainer component={Paper} sx={{ mt: 2 }}>
       <Table sx={{ minWidth: 650 }} aria-label="simple projects table">
-        <TableHead sx={{ backgroundColor: '#f5f5f5' }}> {/* Fondo ligero para cabecera */}
+        {/* CORREGIDO: Quitamos espacios/saltos de línea dentro de TableHead y TableRow */}
+        <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
           <TableRow>
-            {/* Define las cabeceras de las columnas */}
-            <TableCell sx={{ fontWeight: 'bold' }}>Código</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Nombre Proyecto</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Tipología</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Estado</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Unidad</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Proyectista</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }} align="right">Año</TableCell>
+            {headCells.map((headCell) => (
+              <TableCell key={headCell.id} align={headCell.align as any} sx={{ fontWeight: 'bold' }}>
+                {headCell.label}
+              </TableCell>
+            ))}
           </TableRow>
         </TableHead>
         <TableBody>
-          {/* Mapea cada proyecto a una fila de la tabla */}
           {projects.map((project) => (
             <TableRow
-              key={project.id} // Key única para cada fila
-              sx={{ '&:last-child td, &:last-child th': { border: 0 } }} // Estilo MUI para quitar borde inferior de la última fila
+              key={project.id}
+              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
             >
-              {/* Celda para Código con Chip */}
+              {/* Celda Código con Chip */}
               <TableCell component="th" scope="row">
                 <Chip
                   label={project.codigoUnico || ''}
                   size="small"
                   variant="filled"
                   sx={{
-                      backgroundColor: project.tipologia?.colorChip || '#e0e0e0',
-                      color: '#fff',
-                      textShadow: '1px 1px 1px rgba(0,0,0,0.4)',
+                    backgroundColor: project.tipologia?.colorChip || '#e0e0e0',
+                    color: '#fff',
+                    textShadow: '1px 1px 1px rgba(0,0,0,0.4)',
                   }}
                 />
               </TableCell>
-              {/* Celda para Nombre */}
+              {/* Celdas con datos */}
               <TableCell>{project.nombre || ''}</TableCell>
-              {/* Celda para Tipología (nombre) */}
               <TableCell>{project.tipologia?.nombre || ''}</TableCell>
-              {/* Celda para Estado */}
               <TableCell>{project.estado?.nombre || 'N/A'}</TableCell>
-              {/* Celda para Unidad */}
               <TableCell>{project.unidad?.nombre || ''}</TableCell>
-              {/* Celda para Proyectista (nombre o email) */}
-              <TableCell>{project.proyectista?.name || project.proyectista?.email || ''}</TableCell>
-              {/* Celda para Año */}
+              {/* *** CORREGIDO: Celda Proyectista Condicional *** */}
+              <TableCell>
+                {/* Muestra el proyectista SOLO si está autenticado Y si el dato existe */}
+                {isAuthenticated ? (project.proyectista?.name || project.proyectista?.email || '') : ''}
+              </TableCell>
               <TableCell align="right">{project.ano || ''}</TableCell>
-              {/* Añade más TableCell aquí si necesitas más columnas */}
             </TableRow>
           ))}
         </TableBody>

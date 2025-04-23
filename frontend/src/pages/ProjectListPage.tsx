@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Container, Box, CircularProgress, Alert } from '@mui/material';
 import { projectApi, PaginatedProjectsResponse } from '../services/projectApi';
 import { Project } from '../types';
-// Importa la NUEVA versión de ProjectListTable
 import ProjectListTable from '../components/ProjectListTable';
+// *** NUEVO: Importa el hook para saber si está autenticado ***
+import { useIsAuthenticated } from '../store/authStore';
 
 function ProjectListPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -12,28 +13,29 @@ function ProjectListPage() {
   const [paginationInfo, setPaginationInfo] = useState({
       total: 0,
       page: 1,
-      limit: 10, // Podríamos necesitar más si no paginamos en frontend
+      limit: 10,
       totalPages: 0,
   });
+  // *** NUEVO: Obtiene el estado de autenticación ***
+  const isAuthenticated = useIsAuthenticated();
 
   useEffect(() => {
     const loadProjects = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Podrías aumentar el límite si quieres cargar más datos para la tabla simple
-        const data: PaginatedProjectsResponse = await projectApi.fetchProjects({
+        const params = {
              page: paginationInfo.page,
-             // limit: 50, // Ejemplo: cargar más
              limit: paginationInfo.limit,
-        });
+        };
+        // La llamada a la API no cambia, apiService maneja el token internamente
+        const data: PaginatedProjectsResponse = await projectApi.fetchProjects(params);
+
         console.log("Datos recibidos de la API:", data);
         setProjects(data.projects);
-        setPaginationInfo(prev => ({ // Solo actualiza si los datos vienen de la API
-            ...prev, // Mantiene página/límite actuales por ahora
+        setPaginationInfo(prev => ({
+            ...prev,
             total: data.total,
-            // page: data.page, // La API devuelve la página pedida
-            // limit: data.limit, // La API devuelve el límite pedido
             totalPages: data.totalPages,
         }));
       } catch (err) {
@@ -44,40 +46,36 @@ function ProjectListPage() {
       }
     };
     loadProjects();
-  // Dependencias para futura paginación/filtros
   }, [paginationInfo.page, paginationInfo.limit]);
 
-  // El renderizado condicional ahora decide si mostrar la tabla o los mensajes
+
   const renderContent = () => {
-    if (loading) { // Muestra spinner solo mientras carga
+    if (loading && projects.length === 0) {
       return (
-        <Box display="flex" justifyContent="center" alignItems="center" sx={{ mt: 4, height: 300 }}> {/* Dale algo de altura al spinner */}
+        <Box display="flex" justifyContent="center" alignItems="center" sx={{ mt: 4, height: 300 }}>
           <CircularProgress />
         </Box>
       );
     }
-    if (error) { // Muestra error si existe
+    if (error) {
       return <Alert severity="error" sx={{ mt: 4 }}>{error}</Alert>;
     }
-    if (projects.length === 0) { // Muestra mensaje si no hay proyectos
+    if (projects.length === 0 && !loading) {
          return <Typography sx={{ mt: 4 }}>No se encontraron proyectos.</Typography>;
     }
-    // Si no hay loading, no hay error y hay proyectos, muestra la tabla
-    return <ProjectListTable projects={projects} />; // Ya no necesita prop 'loading'
+    // *** NUEVO: Pasa isAuthenticated como prop a la tabla ***
+    return <ProjectListTable projects={projects} isAuthenticated={isAuthenticated} />;
   };
 
   return (
     <Container maxWidth="xl">
       <Box sx={{ my: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Lista de Proyectos ({loading ? '...' : paginationInfo.total}) {/* Muestra '...' mientras carga */}
+          Lista de Proyectos ({loading ? '...' : paginationInfo.total})
         </Typography>
-
-        {/* Renderiza el contenido (spinner, error, tabla o mensaje 'no proyectos') */}
-        {renderContent()}
-
-        {/* Paginación Manual (si se implementa después) */}
-        {/* <Box display="flex" justifyContent="center" sx={{ mt: 2 }}> ... </Box> */}
+        <Box sx={{ mt: 4, width: '100%' }}>
+            {renderContent()}
+        </Box>
       </Box>
     </Container>
   );
