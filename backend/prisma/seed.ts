@@ -8,12 +8,11 @@ async function main() {
   console.log('Start seeding ...');
 
   // --- Clean existing data (optional, useful for development) ---
-  // Be careful in production!
   console.log('Deleting existing data...');
   await prisma.tarea.deleteMany(); // Borrar dependientes primero
-  // CORREGIDO: Eliminadas líneas updateMany que fallaban y eran redundantes antes de deleteMany
-  // Desconectar FKs opcionales en Project antes de borrar Users (si aplica)
+  // Desconectar FKs opcionales en Project antes de borrar Users
   await prisma.project.updateMany({ data: { proyectistaId: null, formuladorId: null }});
+  // Eliminadas líneas updateMany para relaciones M2M que fallaban
   await prisma.project.deleteMany();
   await prisma.user.deleteMany(); // Borrar Users después de Projectos que los referencian
   await prisma.etiqueta.deleteMany();
@@ -121,18 +120,17 @@ async function main() {
       superficieEdificacion: null,
       ano: 2024,
       proyectoPriorizado: true,
-      estado: { connect: { id: estado3.id } }, // Diseño
-      unidad: { connect: { id: unidad1.id } }, // SECPLAN
-      tipologia: { connect: { id: tipo1.id } }, // Espacio Público
-      sector: { connect: { id: sector1.id } }, // Centro
-      proyectista: { connect: { id: regularUser.id } }, // Asignado al usuario 'USUARIO'
+      estado: { connect: { id: estado3.id } },
+      unidad: { connect: { id: unidad1.id } },
+      tipologia: { connect: { id: tipo1.id } },
+      sector: { connect: { id: sector1.id } },
+      proyectista: { connect: { id: regularUser.id } },
       formulador: { connect: { id: coordUser.id } },
-      colaboradores: { connect: [{ id: adminUser.id }] }, // Admin colabora
-      lineaFinanciamiento: { connect: { id: linea2.id } }, // SUBDERE PMU
+      colaboradores: { connect: [{ id: adminUser.id }] },
+      lineaFinanciamiento: { connect: { id: linea2.id } },
       programa: { connect: { id: prog2.id } },
-      etapaActualFinanciamiento: { connect: { id: etapa2.id } }, // Admisible
-      // CORREGIDO: Usar Prisma.Decimal con 'P' mayúscula
-      monto: new Prisma.Decimal('85000000.00'),
+      etapaActualFinanciamiento: { connect: { id: etapa2.id } },
+      monto: new Prisma.Decimal('85000000.00'), // Usa Prisma.Decimal
       tipoMoneda: TipoMoneda.CLP,
       codigoExpediente: 'EXP-PMU-2024-101',
       fechaPostulacion: new Date('2024-03-15'),
@@ -152,21 +150,18 @@ async function main() {
         superficieEdificacion: 250,
         ano: 2023,
         proyectoPriorizado: false,
-        estado: { connect: { id: estado4.id } }, // Ejecución
-        unidad: { connect: { id: unidad3.id } }, // Construcciones
-        tipologia: { connect: { id: tipo2.id } }, // Edificación Pública
-        sector: { connect: { id: sector3.id } }, // Sur Poniente
-        proyectista: undefined, // Sin asignar aún (o no incluir la propiedad)
+        estado: { connect: { id: estado4.id } },
+        unidad: { connect: { id: unidad3.id } },
+        tipologia: { connect: { id: tipo2.id } },
+        sector: { connect: { id: sector3.id } },
+        proyectista: undefined,
         formulador: { connect: { id: coordUser.id } },
-        // Sin colaboradores
-        lineaFinanciamiento: { connect: { id: linea1.id } }, // FNDR
+        lineaFinanciamiento: { connect: { id: linea1.id } },
         programa: { connect: { id: prog1.id } },
-        etapaActualFinanciamiento: { connect: { id: etapa3.id } }, // Convenio Mandato
-        // CORREGIDO: Usar Prisma.Decimal
-        monto: new Prisma.Decimal('120000000'),
+        etapaActualFinanciamiento: { connect: { id: etapa3.id } },
+        monto: new Prisma.Decimal('120000000'), // Usa Prisma.Decimal
         tipoMoneda: TipoMoneda.CLP,
-        // CORREGIDO: Usar Prisma.Decimal
-        montoAdjudicado: new Prisma.Decimal('115500000.50'),
+        montoAdjudicado: new Prisma.Decimal('115500000.50'), // Usa Prisma.Decimal
         codigoLicitacion: 'LIC-FNDR-2023-05',
       },
     });
@@ -178,11 +173,13 @@ async function main() {
 
 main()
   .catch(async (e) => {
-    console.error("Error during seeding:", e); // Loguea el error específico
+    console.error("Error during seeding:", e);
     await prisma.$disconnect();
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    // Asegúrate que $disconnect se llame solo una vez si es necesario
+    // try { await prisma.$disconnect(); } catch {} // Evita doble desconexión si ya falló
+    await prisma.$disconnect(); // Intenta desconectar siempre
     console.log('Prisma client disconnected.');
   });
