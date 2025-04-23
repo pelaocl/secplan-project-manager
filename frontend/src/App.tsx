@@ -1,19 +1,27 @@
 import React from 'react';
-import { Box, Container } from '@mui/material';
-import AppRoutes from './routes/AppRoutes'; // Importa tus rutas
-import TopAppBar from './components/layout/TopAppBar'; // Importa tu barra de navegación
+import { Box } from '@mui/material'; // Quitamos Container de aquí
+import AppRoutes from './routes/AppRoutes';
+import TopAppBar from './components/layout/TopAppBar';
 
 function App() {
-  // Estructura básica del Layout
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopAppBar /> {/* Renderiza la barra de navegación */}
-      <Container component="main" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
-         {/* Aquí se renderizará el componente de la ruta actual */}
-         <AppRoutes />
-      </Container>
+      <TopAppBar />
+      {/* CORREGIDO: Usamos Box en lugar de Container para permitir ancho completo */}
+      <Box
+        component="main"
+        // Añadimos padding directamente al Box si queremos espacios laterales
+        sx={{
+            flexGrow: 1, // Para que ocupe el espacio vertical restante
+            py: 4,      // Padding vertical (igual a my: 4 anterior)
+            px: 3,      // Padding horizontal (ejemplo, ajustar al gusto)
+            width: '100%', // Asegura que ocupe todo el ancho disponible
+            boxSizing: 'border-box' // Incluye padding en el ancho total
+         }}
+      >
+         <AppRoutes /> {/* Las rutas se renderizarán dentro de este Box */}
+      </Box>
       {/* Optional Footer */}
-      {/* <Box component="footer" sx={{ p: 2, mt: 'auto', backgroundColor: 'grey.200' }}>...</Box> */}
     </Box>
   );
 }
