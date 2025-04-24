@@ -1,31 +1,37 @@
 import express from 'express';
+// Importa TODO el módulo del controlador como 'projectController'
 import * as projectController from '../controllers/projectController';
-// CORREGIDO: Importa authenticateToken aquí
+// Importa los middlewares necesarios
 import { authenticateToken } from '../middlewares/authMiddleware';
 import { authorizeRole } from '../middlewares/roleMiddleware';
 import { validateRequest } from '../middlewares/validationMiddleware';
+// Importa los schemas Zod necesarios para validar
 import { createProjectSchema, updateProjectSchema, listProjectsSchema, projectIdSchema } from '../schemas/projectSchemas';
+// Importa el Enum Role para usar en authorizeRole
 import { Role } from '@prisma/client';
 
+// Crea el router
 const router = express.Router();
 
-// GET /api/projects - Ahora aplica authenticateToken SIEMPRE
-// authenticateToken añadirá req.user si hay token válido, si no, req.user será undefined.
-// El servicio findAllProjects diferencia basado en la presencia de req.user.
+// --- Definición de Rutas ---
+
+// GET /api/projects (Lista pública/autenticada)
+// authenticateToken se ejecuta siempre; si hay token válido, añade req.user, si no, req.user es undefined.
+// El servicio diferencia qué campos devolver basado en req.user.
 router.get(
     '/',
-    authenticateToken, // <--- AÑADIDO AQUÍ
-    validateRequest({ query: listProjectsSchema }),
-    projectController.getAllProjects
+    authenticateToken, // Se ejecuta siempre para potencialmente adjuntar usuario
+    validateRequest({ query: listProjectsSchema }), // Valida query params como page, limit, etc.
+    projectController.getAllProjectsHandler // <-- Usa el nombre correcto exportado
 );
 
-// GET /api/projects/:id - También debería tener authenticateToken
-// para poder devolver campos privados si el usuario está logueado.
+// GET /api/projects/:id (Detalle público/autenticado)
+// authenticateToken permite obtener datos completos si el usuario está logueado.
 router.get(
     '/:id',
-    authenticateToken, // <--- AÑADIDO AQUÍ
-    validateRequest({ params: projectIdSchema }),
-    projectController.getProjectById
+    authenticateToken, // Se ejecuta siempre
+    validateRequest({ params: projectIdSchema }), // Valida que :id sea numérico
+    projectController.getProjectByIdHandler // <-- Usa el nombre correcto exportado
 );
 
 // --- Rutas que REQUIEREN Autenticación y Roles Específicos ---
@@ -33,30 +39,29 @@ router.get(
 // POST /api/projects (Crear)
 router.post(
     '/',
-    authenticateToken, // Necesario para saber quién crea y verificar rol
-    authorizeRole([Role.ADMIN, Role.COORDINADOR]), // Solo estos roles pueden crear
-    validateRequest({ body: createProjectSchema }),
-    projectController.createProjectHandler
+    authenticateToken, // Requiere token válido
+    authorizeRole([Role.ADMIN, Role.COORDINADOR]), // Requiere rol específico
+    validateRequest({ body: createProjectSchema }), // Valida el cuerpo de la petición
+    projectController.createProjectHandler // <-- Usa el nombre correcto exportado
 );
 
 // PUT /api/projects/:id (Actualizar)
 router.put(
     '/:id',
-    authenticateToken, // Necesario para saber quién actualiza y verificar rol/permiso
-    authorizeRole([Role.ADMIN, Role.COORDINADOR, Role.USUARIO]), // Roles que *pueden* intentar editar
-    validateRequest({ params: projectIdSchema, body: updateProjectSchema }),
-    projectController.updateProjectHandler // El servicio verifica si USUARIO es el proyectista asignado
+    authenticateToken, // Requiere token válido
+    authorizeRole([Role.ADMIN, Role.COORDINADOR, Role.USUARIO]), // Roles permitidos inicialmente
+    validateRequest({ params: projectIdSchema, body: updateProjectSchema }), // Valida ID y cuerpo
+    projectController.updateProjectHandler // <-- Usa el nombre correcto exportado
 );
 
 // DELETE /api/projects/:id (Eliminar)
 router.delete(
     '/:id',
-    authenticateToken, // Necesario para verificar rol
-    authorizeRole([Role.ADMIN]), // Solo ADMIN puede eliminar
-    validateRequest({ params: projectIdSchema }),
-    projectController.deleteProjectHandler
+    authenticateToken, // Requiere token válido
+    authorizeRole([Role.ADMIN]), // Solo ADMIN
+    validateRequest({ params: projectIdSchema }), // Valida ID
+    projectController.deleteProjectHandler // <-- Usa el nombre correcto exportado
 );
 
-// TODO: Añadir ruta para exportar? GET /export ? Considerar auth
-
+// Exporta el router configurado
 export default router;

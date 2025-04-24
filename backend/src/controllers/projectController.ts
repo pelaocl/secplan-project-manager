@@ -1,76 +1,73 @@
 import { Request, Response, NextFunction } from 'express';
 import * as projectService from '../services/projectService';
-// CORREGIDO: Usa AuthenticatedRequest para acceder a los campos validados y a req.user
-import { AuthenticatedRequest } from '../types/express';
-import { NotFoundError } from '../utils/errors';
-// Ya no necesitas importar ListProjectsQuery aquí si confías en el tipo de req.validatedQuery
-// import { CreateProjectInput, UpdateProjectInput } from '../schemas/projectSchemas';
+import { CreateProjectInput, UpdateProjectInput, ListProjectsQuery } from '../schemas/projectSchemas';
+// --- CORREGIDO: Importa AuthenticatedRequest desde su origen ---
+import { AuthenticatedRequest } from '../types/express'; // <<<--- Ruta corregida
+// -------------------------------------------------------------
+import { NotFoundError, BadRequestError } from '../utils/errors';
 
-// Get All Projects (Public/Authenticated)
-export const getAllProjects = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// --- Handlers (sin cambios en la lógica, solo verifica la importación arriba) ---
+
+export const getAllProjectsHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        // CORREGIDO: Usa req.validatedQuery (o req.query si no hay validación de query)
-        // El tipo debería ser inferido correctamente desde el schema Zod usado en el middleware
-        const queryParams = req.validatedQuery || req.query; // Usa el validado si existe
-        const user = req.user; // Ya está disponible por AuthenticatedRequest
-        // Ya no necesitas el 'as unknown as ListProjectsQuery' si usas req.validatedQuery
+        const queryParams = (req.validatedQuery || req.query) as ListProjectsQuery;
+        const user = req.user;
         const result = await projectService.findAllProjects(queryParams, user);
-        res.status(200).json(result);
+        res.status(200).json({ status: 'success', ...result });
     } catch (error) {
         next(error);
     }
 };
 
-// Get Project By ID (Public/Authenticated)
-export const getProjectById = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const getProjectByIdHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        // CORREGIDO: Usa req.validatedParams
         const params = req.validatedParams || req.params;
-        const projectId = params.id as number; // El tipo debería ser inferido por Zod
+        const projectId = params.id as number;
+        if (isNaN(projectId)) { return next(new BadRequestError('ID de proyecto inválido.')); }
         const user = req.user;
         const project = await projectService.findProjectById(projectId, user);
-        res.status(200).json(project);
+        res.status(200).json({ status: 'success', data: { project } });
     } catch (error) {
         next(error);
     }
 };
 
-// Create Project (Authenticated: ADMIN, COORDINADOR)
 export const createProjectHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    // console.log('[CONTROLLER createProjectHandler] req.body RECEIVED:', JSON.stringify(req.body, null, 2));
+    const user = req.user;
+    if (!user) { return next(new Error('req.user no definido en ruta protegida')); }
+    const validatedData = (req.validatedBody || req.body) as CreateProjectInput;
     try {
-        // CORREGIDO: Usa req.validatedBody
-        const projectData = req.validatedBody; // Tipo inferido por Zod
-        if (!req.user) { /* Manejo de error o confiar en middleware */ }
-        const newProject = await projectService.createProject(projectData, req.user!);
-        res.status(201).json(newProject);
+        const project = await projectService.createProject(validatedData, user);
+        res.status(201).json({ status: 'success', data: { project } });
     } catch (error) {
         next(error);
     }
 };
 
-// Update Project (Authenticated: ADMIN, COORDINADOR, USUARIO)
 export const updateProjectHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        // CORREGIDO: Usa req.validatedParams y req.validatedBody
+     const user = req.user;
+     if (!user) { return next(new Error('req.user no definido en ruta protegida')); }
+     try {
         const params = req.validatedParams || req.params;
-        const projectId = params.id as number; // Tipo inferido por Zod
-        const updateData = req.validatedBody; // Tipo inferido por Zod
-        if (!req.user) { /* Manejo de error o confiar en middleware */ }
-        const updatedProject = await projectService.updateProject(projectId, updateData, req.user!);
-        res.status(200).json(updatedProject);
+        const projectId = params.id as number;
+        if (isNaN(projectId)) { return next(new BadRequestError('ID de proyecto inválido.')); }
+        const validatedData = (req.validatedBody || req.body) as UpdateProjectInput;
+        const updatedProject = await projectService.updateProject(projectId, validatedData, user);
+        res.status(200).json({ status: 'success', data: { project: updatedProject } });
     } catch (error) {
-        next(error);
+         next(error);
     }
 };
 
-// Delete Project (Authenticated: ADMIN)
 export const deleteProjectHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    const user = req.user;
+    if (!user) { return next(new Error('req.user no definido en ruta protegida')); }
     try {
-        // CORREGIDO: Usa req.validatedParams
         const params = req.validatedParams || req.params;
-        const projectId = params.id as number; // Tipo inferido por Zod
-        if (!req.user) { /* Manejo de error o confiar en middleware */ }
-        await projectService.deleteProject(projectId, req.user!);
+        const projectId = params.id as number;
+        if (isNaN(projectId)) { return next(new BadRequestError('ID de proyecto inválido.')); }
+        await projectService.deleteProject(projectId, user);
         res.status(204).send();
     } catch (error) {
         next(error);
