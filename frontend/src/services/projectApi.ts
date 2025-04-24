@@ -1,7 +1,10 @@
-import { apiService } from './apiService';
-import { Project } from '../types'; // Importa tu interfaz Project
+import { apiService, ApiError } from './apiService';
+// Asegúrate que ProjectFormValues (del schema Zod del frontend) sea compatible
+// con lo que espera la API (CreateProjectInput del backend Zod schema).
+// Podrían necesitarse transformaciones menores si no lo son.
+import { Project, ProjectFormValues } from '../types';
 
-// Define la estructura esperada de la respuesta paginada de la API /api/projects
+// Interfaz para la respuesta paginada (sin cambios)
 export interface PaginatedProjectsResponse {
   projects: Project[];
   total: number;
@@ -10,10 +13,6 @@ export interface PaginatedProjectsResponse {
   totalPages: number;
 }
 
-/**
- * Obtiene una lista paginada de proyectos desde la API.
- * @param params Opcional: Objeto URLSearchParams o un objeto simple para filtros y paginación
- */
 async function fetchProjects(params?: URLSearchParams | Record<string, any>): Promise<PaginatedProjectsResponse> {
     let queryString = '';
     if (params) {
@@ -24,22 +23,43 @@ async function fetchProjects(params?: URLSearchParams | Record<string, any>): Pr
         }
     }
     console.log(`Workspaceing projects with query: ${queryString}`);
-    // apiService añade el token si el usuario está logueado
     const data = await apiService.get<PaginatedProjectsResponse>(`/projects${queryString}`);
     return data;
 }
 
-/**
- * Obtiene un único proyecto por su ID.
- * @param id El ID del proyecto a obtener.
- */
-// --- FUNCIÓN NUEVA ---
 async function getProjectById(id: number | string): Promise<Project> {
     console.log(`Workspaceing project with ID: ${id}`);
-    // apiService añade el token si el usuario está logueado, obteniendo datos completos si es posible
     const data = await apiService.get<Project>(`/projects/${id}`);
-    // apiService lanzará ApiError si no se encuentra (404) o hay otro error
     return data;
+}
+
+// --- FUNCIÓN NUEVA: Crear Proyecto ---
+/**
+ * Envía los datos de un nuevo proyecto a la API para crearlo.
+ * @param projectData Datos del proyecto validados por el formulario Zod del frontend.
+ * @returns El objeto del proyecto recién creado (según lo devuelva la API).
+ */
+async function createProject(projectData: ProjectFormValues): Promise<Project> {
+    console.log("Creating project with data:", projectData);
+
+    // NOTA: Aquí podrías necesitar transformar 'projectData' si los tipos
+    // del formulario (ProjectFormValues) no coinciden 100% con lo que
+    // espera la API backend (CreateProjectInput).
+    // Por ejemplo, asegurar que las fechas sean strings ISO si es necesario.
+    // Pero si los schemas Zod (frontend y backend) están bien alineados
+    // con las transformaciones/coerciones, puede que no sea necesario.
+    const dataToSend = { ...projectData };
+
+    try {
+         // Llama al endpoint POST /api/projects
+        const newProject = await apiService.post<Project>('/projects', dataToSend);
+        console.log("Project created successfully:", newProject);
+        return newProject;
+    } catch (error) {
+        console.error("Error creating project:", error);
+        // Re-lanza el error para que el componente lo maneje
+        throw error;
+    }
 }
 // --- FIN FUNCIÓN NUEVA ---
 
@@ -47,6 +67,8 @@ async function getProjectById(id: number | string): Promise<Project> {
 // Exporta las funciones de la API de proyectos
 export const projectApi = {
     fetchProjects,
-    getProjectById, // <-- Exporta la nueva función
-    // Aquí añadirías createProject, updateProject, deleteProject después
+    getProjectById,
+    createProject, // <-- Exporta la nueva función
+    // updateProject, // Añadir después
+    // deleteProject, // Añadir después
 };

@@ -21,6 +21,7 @@
     "author": "Tu Nombre o Equipo",
     "license": "ISC",
     "devDependencies": {
+        "@hookform/devtools": "^4.4.0",
         "@types/bcryptjs": "^2.4.6",
         "@types/cors": "^2.8.17",
         "@types/express": "^5.0.1",
@@ -42,7 +43,6 @@
         "morgan": "^1.10.0",
         "zod": "^3.24.3"
     },
-
     "prisma": {
         "seed": "npm run seed"
     }

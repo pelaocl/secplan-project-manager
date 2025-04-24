@@ -1,93 +1,76 @@
 import { z } from 'zod';
 
-// Frontend schema often deals with strings from inputs, needs parsing/coercion
-export const projectFormSchema = z.object({
-  // Ensure fields match the form structure and backend expectations after parsing
-  nombre: z.string().min(1, "Nombre es requerido").min(3, "Nombre requiere al menos 3 caracteres"),
-  tipologiaId: z.preprocess( // Allow empty string from Select, convert to number or keep empty
-    (val) => (val === '' ? '' : parseInt(String(val), 10)),
-    z.number({ required_error: "Tipología es requerida" }).int().positive("Tipología es requerida")
-  ),
-  descripcion: z.string().optional(), // Allow empty string
-  direccion: z.string().optional(),
-  superficieTerreno: z.preprocess(
-      (val) => (val === '' ? undefined : parseFloat(String(val).replace(',', '.'))), // Allow empty string -> undefined
-      z.number().positive("Superficie Terreno debe ser positiva").optional().nullable() // Backend handles null
-  ),
-  superficieEdificacion: z.preprocess(
-      (val) => (val === '' ? undefined : parseFloat(String(val).replace(',', '.'))),
-      z.number().positive("Superficie Edificación debe ser positiva").optional().nullable()
-  ),
-  ano: z.preprocess(
-      (val) => (val === '' ? undefined : parseInt(String(val), 10)),
-      z.number().int().min(1900).max(new Date().getFullYear() + 5, "Año inválido").optional().nullable()
-  ),
-  proyectoPriorizado: z.boolean().optional(),
-  estadoId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)), // Allow empty string -> null
-      z.number().int().positive().optional().nullable()
-  ),
-  unidadId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)),
-      z.number().int().positive().optional().nullable()
-  ),
-  sectorId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)),
-      z.number().int().positive().optional().nullable()
-  ),
-  // --- Equipo ---
-  proyectistaId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)), // Allow empty string/null from Autocomplete
-      z.number().int().positive().optional().nullable()
-  ),
-  formuladorId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)),
-      z.number().int().positive().optional().nullable()
-  ),
-  colaboradoresIds: z.array(z.number().int().positive()).optional(), // Expecting array of numbers
-  // --- Financiera ---
-  lineaFinanciamientoId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)),
-      z.number().int().positive().optional().nullable()
-  ),
-   programaId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)),
-      z.number().int().positive().optional().nullable()
-  ),
-  etapaFinanciamientoId: z.preprocess(
-      (val) => (val === '' ? null : parseInt(String(val), 10)),
-      z.number().int().positive().optional().nullable()
-  ),
-  monto: z.preprocess(
-      (val) => (val === '' ? undefined : parseFloat(String(val).replace(',', '.'))),
-      z.number().positive("Monto debe ser positivo").optional().nullable()
-  ),
-  tipoMoneda: z.enum(['CLP', 'UF']).optional().default('CLP'),
-  codigoExpediente: z.string().optional(),
-  fechaPostulacion: z.preprocess(
-       // Handle various inputs: string date, Date object, empty string, null
-       (arg) => {
-         if (!arg || arg === '') return null; // Treat empty string as null
-         try {
-             // Attempt to create a valid date. ISO format (YYYY-MM-DD) is safest.
-             const date = new Date(arg);
-             // Check if the date is valid
-             return isNaN(date.getTime()) ? null : date.toISOString().split('T')[0]; // Send as YYYY-MM-DD string
-         } catch {
-             return null; // Invalid date format
-         }
-     },
-     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (AAAA-MM-DD)").optional().nullable() // Validate format before sending
-   ),
-  montoAdjudicado: z.preprocess(
-      (val) => (val === '' ? undefined : parseFloat(String(val).replace(',', '.'))),
-      z.number().positive("Monto Adjudicado debe ser positivo").optional().nullable()
-  ),
-  codigoLicitacion: z.string().optional(),
+// Helper de preproceso: Convierte explícitamente '', null, undefined a null ANTES de otras validaciones.
+// Si no es ninguno de esos, devuelve el valor original para que z.coerce pueda actuar.
+const preprocessOptionalNumberInput = (val: unknown): unknown => {
+    if (val === '' || val == null) return null; // Usamos == null para atrapar undefined también
+    return val; // Devuelve el string numérico u otro valor para que coerce actúe
+};
 
-  // Include id only if needed for update logic identification, but typically not part of the form data itself
-  id: z.number().optional(),
+// Schema Zod REFINADO para el formulario de Proyecto en el Frontend
+export const projectFormSchema = z.object({
+  // --- Información Básica ---
+  nombre: z.string().min(1, "Nombre es requerido").min(3, "Nombre requiere al menos 3 caracteres"),
+  // Selects Requeridos: deben tener un ID numérico post-coerción
+  tipologiaId: z.coerce.number({ required_error: "Tipología es requerida", invalid_type_error: "Tipología inválida" }).int().positive(),
+
+  // --- Campos Opcionales Refinados ---
+  estadoId: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "ID de Estado debe ser número" }).int().positive().nullable() // Permite null explícito
+  ),
+  unidadId: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "ID de Unidad debe ser número" }).int().positive().nullable()
+  ),
+  sectorId: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "ID de Sector debe ser número" }).int().positive().nullable()
+  ),
+  descripcion: z.string().optional().nullable(), // Permite string vacío o nulo
+  direccion: z.string().optional().nullable(),
+  superficieTerreno: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "Superficie debe ser número" }).positive("Superficie debe ser positiva").nullable()
+  ),
+  superficieEdificacion: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "Superficie debe ser número" }).positive("Superficie debe ser positiva").nullable()
+  ),
+  ano: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "Año debe ser número" }).int()
+       .min(1900, "Año fuera de rango")
+       .max(new Date().getFullYear() + 10, "Año fuera de rango")
+       .nullable() // Permite que sea null
+  ),
+  proyectoPriorizado: z.boolean().optional().default(false),
+
+  // --- Equipo (Interno) ---
+  proyectistaId: z.number().int().positive().optional().nullable(), // Autocomplete ya debería devolver number o null
+  formuladorId: z.number().int().positive().optional().nullable(),
+  colaboradoresIds: z.array(z.number().int().positive()).optional().default([]), // Default a array vacío
+
+  // --- Información Financiera (Interno) ---
+  lineaFinanciamientoId: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number().int().positive().nullable()
+  ),
+  programaId: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number().int().positive().nullable()
+  ),
+  etapaFinanciamientoId: z.preprocess(preprocessOptionalNumberInput,
+      z.coerce.number().int().positive().nullable()
+  ),
+  monto: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "Monto debe ser número" }).positive("Monto debe ser positivo").nullable()
+  ),
+  tipoMoneda: z.enum(['CLP', 'UF'], { errorMap: () => ({ message: 'Seleccione CLP o UF' }) }).optional().default('CLP'),
+  codigoExpediente: z.string().optional().nullable(),
+  fechaPostulacion: z.preprocess((arg) => { // Mantenemos este preproceso para fechas
+    if (arg === null || arg === undefined || arg === '') return null;
+    const date = (arg instanceof Date) ? arg : new Date(String(arg) + 'T00:00:00'); // Añade hora UTC para evitar problemas de timezone al parsear solo fecha
+    return isNaN(date.getTime()) ? null : date;
+    }, z.date().optional().nullable()
+  ),
+  montoAdjudicado: z.preprocess(preprocessOptionalNumberInput,
+     z.coerce.number({ invalid_type_error: "Monto Adjudicado debe ser número" }).positive("Monto Adjudicado debe ser positivo").nullable()
+  ),
+  codigoLicitacion: z.string().optional().nullable(),
 });
 
-// Type for form values derived from Zod schema
+// Tipo inferido (sin cambios)
 export type ProjectFormValues = z.infer<typeof projectFormSchema>;

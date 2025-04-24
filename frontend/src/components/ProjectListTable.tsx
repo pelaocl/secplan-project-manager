@@ -1,3 +1,5 @@
+// Copia el código completo de ProjectListTable.tsx de la RESPUESTA #79 aquí
+// (La versión que tenía project.estado?.nombre || 'N/A', etc.)
 import React from 'react';
 import {
     Box,
@@ -8,10 +10,10 @@ import {
     TableHead,
     TableRow,
     Paper,
-    Chip
+    Chip,
+    Typography
 } from '@mui/material';
 import { Project } from '../../types';
-// *** NUEVO: Importa useNavigate para la navegación ***
 import { useNavigate } from 'react-router-dom';
 
 interface ProjectListTableProps {
@@ -30,19 +32,14 @@ const headCells = [
 ];
 
 function ProjectListTable({ projects, isAuthenticated }: ProjectListTableProps) {
-  // *** NUEVO: Hook para navegar ***
   const navigate = useNavigate();
 
-  // *** NUEVO: Handler para el clic en la fila ***
   const handleRowClick = (projectId: number) => {
-    console.log(`Navegando a /projects/${projectId}`);
     navigate(`/projects/${projectId}`);
   };
 
-  console.log("ProjectListTable received props:", { projects, isAuthenticated });
-
   if (!projects || projects.length === 0) {
-    return null; // La página padre maneja el mensaje "No hay proyectos"
+    return null;
   }
 
   return (
@@ -59,27 +56,31 @@ function ProjectListTable({ projects, isAuthenticated }: ProjectListTableProps) 
         </TableHead>
         <TableBody>
           {projects.map((project) => (
-            // *** NUEVO: Añadimos onClick y estilos hover a TableRow ***
             <TableRow
               key={project.id}
-              hover // Efecto visual al pasar el mouse
-              onClick={() => handleRowClick(project.id)} // Llama al handler al hacer clic
-              sx={{
-                 '&:last-child td, &:last-child th': { border: 0 },
-                 cursor: 'pointer' // Cambia el cursor a 'pointer'
-                }}
+              hover
+              onClick={() => handleRowClick(project.id)}
+              sx={{ cursor: 'pointer', '&:last-child td, &:last-child th': { border: 0 } }}
             >
+              {/* --- Celdas en ORDEN con acceso seguro --- */}
+              {/* 1. Código */}
               <TableCell component="th" scope="row">
-                <Chip /* ... Mismo código del chip ... */ label={project.codigoUnico || ''} size="small" variant="filled" sx={{ backgroundColor: project.tipologia?.colorChip || '#e0e0e0', color: '#fff', textShadow: '1px 1px 1px rgba(0,0,0,0.4)' }} />
+                <Chip label={project.codigoUnico || ''} size="small" variant="filled" sx={{ backgroundColor: project.tipologia?.colorChip || '#e0e0e0', color: '#fff', textShadow: '1px 1px 1px rgba(0,0,0,0.4)'}}/>
               </TableCell>
+              {/* 2. Nombre */}
               <TableCell>{project.nombre || ''}</TableCell>
+              {/* 3. Tipología */}
               <TableCell>{project.tipologia?.nombre || ''}</TableCell>
-              <TableCell>{project.estado?.nombre || 'N/A'}</TableCell>
-              <TableCell>{project.unidad?.nombre || ''}</TableCell>
+              {/* 4. Estado */}
+              <TableCell>{project.estado?.nombre || 'N/A'}</TableCell> {/* <--- Acceso seguro */}
+              {/* 5. Unidad */}
+              <TableCell>{project.unidad?.nombre || ''}</TableCell> {/* <--- Acceso seguro */}
+              {/* 6. Proyectista (Condicional) */}
               <TableCell>
                 {isAuthenticated ? (project.proyectista?.name || project.proyectista?.email || '') : ''}
               </TableCell>
-              <TableCell align="right">{project.ano || ''}</TableCell>
+              {/* 7. Año */}
+              <TableCell align="right">{project.ano ?? ''}</TableCell> {/* <--- Acceso seguro */}
             </TableRow>
           ))}
         </TableBody>
