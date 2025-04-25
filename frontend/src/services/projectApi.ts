@@ -29,8 +29,16 @@ async function fetchProjects(params?: URLSearchParams | Record<string, any>): Pr
 
 async function getProjectById(id: number | string): Promise<Project> {
     console.log(`Workspaceing project with ID: ${id}`);
-    const data = await apiService.get<Project>(`/projects/${id}`);
-    return data;
+    // Pide la estructura completa que devuelve el backend controller
+    const response = await apiService.get<{ status: string, data: { project: Project } }>(`/projects/${id}`);
+    // Verifica y devuelve SOLO el objeto project anidado
+    if (response && response.data && response.data.project) {
+        return response.data.project;
+    } else {
+        // Lanza un error si la estructura no es la esperada
+        console.error("Respuesta inesperada de API para getProjectById:", response);
+        throw new Error(`No se pudo obtener el proyecto con ID ${id} o la respuesta tuvo un formato incorrecto.`);
+    }
 }
 
 // --- FUNCIÓN NUEVA: Crear Proyecto ---
