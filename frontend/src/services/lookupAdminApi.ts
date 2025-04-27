@@ -77,11 +77,63 @@ async function create(lookupType: LookupType, data: AnyLookupFormValues): Promis
 }
 // --- FIN CREA REGISTRO ---
 
-// TODO: Añadir update, deleteRecord
+// --- EDITAR REGISTRO ---
+/**
+ * Actualiza un registro de lookup existente por ID y tipo.
+ */
+async function update(lookupType: LookupType, id: number, data: AnyUpdateLookupFormValues): Promise<any> {
+    console.log(`[lookupAdminApi] Updating ${lookupType} ID ${id}:`, data);
+    if (!validLookupTypes.includes(lookupType)) { throw new Error(`Tipo de lookup inválido: ${lookupType}`); }
+    try {
+        // Llama al endpoint PUT genérico
+        const response = await apiService.put<MutateLookupResponse<any>>(`/admin/lookups/${lookupType}/${id}`, data);
+
+        const singularKey = lookupType.endsWith('s') ? lookupType.slice(0, -1) : lookupType;
+        if (response && response.data && response.data[singularKey]) {
+            console.log(`[lookupAdminApi] Record ${id} for ${lookupType} updated successfully.`);
+            return response.data[singularKey]; // Devuelve el objeto actualizado
+        } else {
+            console.error(`[lookupAdminApi] Unexpected response structure for update(${lookupType}, ${id}):`, response);
+            throw new Error(`Respuesta inválida al actualizar ${lookupType}.`);
+        }
+    } catch (error) {
+        console.error(`[lookupAdminApi] Error updating ${lookupType} ID ${id}:`, error);
+        throw error; // Relanza para que la página lo maneje
+    }
+}
+// --- FIN EDITAR REGISTRO ---
+
+
+// --- ELIMINAR REGISTRO ---
+/**
+ * Elimina un registro de lookup por ID y tipo.
+ */
+async function deleteRecord(lookupType: LookupType, id: number): Promise<void> {
+    console.log(`[lookupAdminApi] Deleting ${lookupType} ID ${id}...`);
+    if (!validLookupTypes.includes(lookupType)) { throw new Error(`Tipo de lookup inválido: ${lookupType}`); }
+    try {
+        // Llama al endpoint DELETE genérico
+        await apiService.delete(`/admin/lookups/${lookupType}/${id}`);
+        console.log(`[lookupAdminApi] Record ${id} for ${lookupType} delete request sent.`);
+    } catch (error) {
+        console.error(`[lookupAdminApi] Error deleting ${lookupType} ID ${id}:`, error);
+        // Relanza errores específicos si es posible
+        if (error instanceof ApiError) {
+            if (error.status === 400) { // Backend devuelve 400 si está en uso
+                 throw new Error(error.body?.message || 'No se puede eliminar porque está en uso.');
+            }
+            if (error.status === 404) {
+                 throw new Error(`Registro no encontrado para eliminar.`);
+            }
+        }
+        throw error;
+    }
+}
+// --- FIN ELIMINAR REGISTRO ---
 
 export const lookupAdminApi = {
     fetchAll,
     create,
-    // update,
-    // deleteRecord,
+    update,
+    deleteRecord,
 };
