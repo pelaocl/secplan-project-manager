@@ -1,23 +1,27 @@
+// ========================================================================
+// INICIO: Contenido COMPLETO y MODIFICADO para AppRoutes.tsx (Añade Panel Control)
+// ========================================================================
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { CircularProgress, Box } from '@mui/material';
 
-// --- NUEVO: Importa el componente ProtectedRoute ---
+// Importa el componente ProtectedRoute
 import ProtectedRoute from '../components/ProtectedRoute';
-// Importa el tipo UserRole si no lo has hecho ya en types/index.ts
+// Importa el tipo UserRole
 import { UserRole } from '../types';
 
-// Carga diferida (Lazy Loading) de los componentes de página
+// --- Carga diferida (Lazy Loading) de los componentes de página ---
 const LoginPage = lazy(() => import('../pages/LoginPage'));
 const ProjectListPage = lazy(() => import('../pages/ProjectListPage'));
 const ProjectDetailPage = lazy(() => import('../pages/ProjectDetailPage'));
-const ProjectCreatePage = lazy(() => import('../pages/ProjectCreatePage')); // Asegúrate que este archivo exista (puede estar vacío por ahora)
-const ProjectEditPage = lazy(() => import('../pages/ProjectEditPage')); // Asegúrate que este archivo exista (puede estar vacío por ahora)
-const DashboardPage = lazy(() => import('../pages/DashboardPage')); // Asegúrate que este archivo exista
-const AdminUsersPage = lazy(() => import('../pages/AdminUsersPage')); // Asegúrate que este archivo exista
-const AdminTagsPage = lazy(() => import('../pages/AdminTagsPage')); // Asegúrate que este archivo exista
-const AdminLookupsPage = lazy(() => import('../pages/AdminLookupsPage')); // Asegúrate que este archivo exista
-const NotFoundPage = lazy(() => import('../pages/NotFoundPage')); // Asegúrate que este archivo exista
+const ProjectCreatePage = lazy(() => import('../pages/ProjectCreatePage'));
+const ProjectEditPage = lazy(() => import('../pages/ProjectEditPage'));
+const DashboardPage = lazy(() => import('../pages/DashboardPage'));
+const AdminUsersPage = lazy(() => import('../pages/AdminUsersPage'));
+const AdminTagsPage = lazy(() => import('../pages/AdminTagsPage')); // Ya existía
+const AdminLookupsPage = lazy(() => import('../pages/AdminLookupsPage'));
+const NotFoundPage = lazy(() => import('../pages/NotFoundPage'));
+const ControlPanelPage = lazy(() => import('../pages/ControlPanelPage')); // <-- NUEVA IMPORTACIÓN LAZY
 
 // Componente simple para mostrar mientras cargan las páginas lazy
 const LoadingFallback = () => (
@@ -31,61 +35,58 @@ const ROLES = {
     ADMIN: 'ADMIN' as UserRole,
     COORDINADOR: 'COORDINADOR' as UserRole,
     USUARIO: 'USUARIO' as UserRole,
+    // VISITANTE no necesita definición aquí si no se usa en allowedRoles
 }
 
 function AppRoutes() {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
+    return (
+        <Suspense fallback={<LoadingFallback />}>
+            <Routes>
 
-        {/* --- Rutas Públicas --- */}
-        {/* Cualquiera puede acceder a estas */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<ProjectListPage />} />
-        <Route path="/projects/:id" element={<ProjectDetailPage />} />
-
-
-        {/* --- Rutas Protegidas por Login --- */}
-        {/* Solo usuarios autenticados (cualquier rol) pueden acceder */}
-        {/* El componente ProtectedRoute verifica si isAuthenticated es true */}
-        <Route element={<ProtectedRoute />}>
-            {/* Aquí irían rutas que solo requieren estar logueado, sin importar el rol */}
-            {/* Por ejemplo, una página de perfil de usuario, si la hubiera */}
-            {/* <Route path="/profile" element={<UserProfilePage />} /> */}
-
-            {/* Nota: ProjectEditPage está aquí, pero la lógica *interna* de si */}
-            {/* un USUARIO puede editar *ese proyecto específico* se maneja */}
-            {/* en el backend y/o en la página misma. El rol base se permite aquí. */}
-             <Route path="/projects/:id/edit" element={<ProjectEditPage />} />
-        </Route>
+                {/* --- Rutas Públicas --- */}
+                {/* Cualquiera puede acceder */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/" element={<ProjectListPage />} />
+                <Route path="/projects/:id" element={<ProjectDetailPage />} />
 
 
-        {/* --- Rutas Protegidas por Rol: COORDINADOR o ADMIN --- */}
-        {/* Solo usuarios con rol COORDINADOR o ADMIN pueden acceder */}
-        <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.COORDINADOR]} />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/projects/new" element={<ProjectCreatePage />} />
-            {/* Si hubiera otras rutas para estos roles */}
-        </Route>
+                {/* --- Rutas Protegidas por Login (Cualquier Rol) --- */}
+                {/* Solo usuarios autenticados */}
+                <Route element={<ProtectedRoute />}>
+                    {/* Ruta de Edición de Proyecto */}
+                    <Route path="/projects/:id/edit" element={<ProjectEditPage />} />
+                    {/* Aquí irían otras rutas que solo requieren login, ej: /mi-perfil */}
+                </Route>
 
 
-        {/* --- Rutas Protegidas por Rol: ADMIN --- */}
-        {/* Solo usuarios con rol ADMIN pueden acceder */}
-        <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]} />}>
-            <Route path="/admin/users" element={<AdminUsersPage />} />
-            <Route path="/admin/tags" element={<AdminTagsPage />} />
-            <Route path="/admin/lookups" element={<AdminLookupsPage />} />
-            {/* Si hubiera otras rutas solo para admin */}
-        </Route>
+                 {/* --- NUEVO: Ruta Panel de Control (Admin y Coordinador) --- */}
+                 <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.COORDINADOR]} />}>
+                    <Route path="/panel-control" element={<ControlPanelPage />} />
+                     {/* También agrupamos aquí las que comparten estos roles */}
+                     <Route path="/dashboard" element={<DashboardPage />} />
+                     <Route path="/projects/new" element={<ProjectCreatePage />} />
+                 </Route>
 
 
-        {/* --- Ruta Catch-all (404) --- */}
-        {/* Esta siempre debe ir al final */}
-        <Route path="*" element={<NotFoundPage />} />
+                {/* --- Rutas Específicas de Admin (Solo Admin) --- */}
+                {/* Estas rutas individuales siguen necesitando protección ADMIN */}
+                <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]} />}>
+                    <Route path="/admin/users" element={<AdminUsersPage />} />
+                    <Route path="/admin/tags" element={<AdminTagsPage />} />
+                    <Route path="/admin/lookups" element={<AdminLookupsPage />} />
+                    {/* Si hubiera otras rutas solo para admin */}
+                </Route>
 
-      </Routes>
-    </Suspense>
-  );
+
+                {/* --- Ruta Catch-all (404) --- */}
+                <Route path="*" element={<NotFoundPage />} />
+
+            </Routes>
+        </Suspense>
+    );
 }
 
 export default AppRoutes;
+// ========================================================================
+// FIN: Contenido COMPLETO y MODIFICADO para AppRoutes.tsx (Añade Panel Control)
+// ========================================================================
