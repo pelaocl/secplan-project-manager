@@ -43,5 +43,17 @@ export type UnidadFormValues = z.infer<typeof unidadFormSchema>;
 export type TipologiaFormValues = z.infer<typeof tipologiaFormSchema>;
 export type ProgramaFormValues = z.infer<typeof programaFormSchema>;
 
+// --- AÑADE ESTO AL FINAL de lookupFormSchema.ts ---
+export const updateSimpleLookupFormSchema = simpleLookupFormSchema.partial();
+export const updateUnidadFormSchema = unidadFormSchema.partial();
+export const updateTipologiaFormSchema = tipologiaFormSchema.partial();
+export const updateProgramaFormSchema = programaFormSchema.partial();
+
+export type UpdateSimpleLookupFormValues = z.infer<typeof updateSimpleLookupFormSchema>;
+export type UpdateUnidadFormValues = z.infer<typeof updateUnidadFormSchema>;
+export type UpdateTipologiaFormValues = z.infer<typeof updateTipologiaFormSchema>;
+export type UpdateProgramaFormValues = z.infer<typeof updateProgramaFormSchema>;
+export type AnyUpdateLookupFormValues = UpdateSimpleLookupFormValues | UpdateUnidadFormValues | UpdateTipologiaFormValues | UpdateProgramaFormValues;
+// --- FIN DE LO QUE HAY QUE AÑADIR ---
 // Tipo unión para el formulario (útil para RHF con resolver dinámico)
 export type AnyLookupFormValues = SimpleLookupFormValues | UnidadFormValues | TipologiaFormValues | ProgramaFormValues;

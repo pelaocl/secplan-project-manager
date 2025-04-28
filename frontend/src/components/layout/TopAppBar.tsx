@@ -1,29 +1,39 @@
 // ========================================================================
-// INICIO: Contenido MODIFICADO para TopAppBar.tsx (Fase 1: Layout y Menú Usuario)
+// INICIO: Contenido COMPLETO y CORREGIDO para TopAppBar.tsx (v3 - Posición Menú)
 // ========================================================================
-import React, { useState } from 'react'; // Importa useState
+import React, { useState } from 'react';
 import {
-    AppBar, Toolbar, Typography, Button, Box, Stack, Avatar, Chip, Tooltip, IconButton, Menu, MenuItem // <-- Añadidos Menu, MenuItem
+    AppBar, Toolbar, Typography, Button, Box, Stack, Avatar, Chip, Tooltip, IconButton, Menu, MenuItem, useTheme
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // Icono genérico para usuario
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // O el icono que prefieras
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'; // Para el item de menú
 // Importa los hooks/selectores necesarios de tu store Zustand
 import { useIsAuthenticated, useCurrentUser, useAuthActions, useCurrentUserRole } from '../../store/authStore';
-// Quitamos UserRole y theme si no se usan directamente aquí por ahora
+import { UserRole } from '../../types';
 
-// Helper para obtener iniciales (sin cambios)
-const getInitials = (name?: string | null): string => { if (!name) return '?'; const names = name.split(' '); if (names.length > 1) { return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase(); } else if (names.length === 1 && names[0].length > 0) { return names[0][0].toUpperCase(); } return '?'; };
+// Helper para obtener iniciales del nombre (simple)
+const getInitials = (name?: string | null): string => {
+    if (!name) return '?';
+    const names = name.trim().split(' ');
+    if (names.length > 1 && names[0] && names[names.length - 1]) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    } else if (names.length === 1 && names[0].length > 0) {
+        return names[0][0].toUpperCase();
+    }
+    return '?';
+};
 
 function TopAppBar() {
+    const theme = useTheme(); // Accede al tema si necesitas colores específicos
     const isAuthenticated = useIsAuthenticated();
     const currentUser = useCurrentUser();
-    const userRole = useCurrentUserRole();
     const { logout } = useAuthActions();
     const navigate = useNavigate();
+    const userRole = useCurrentUserRole();
 
-    // --- Estado para el Menú de Usuario ---
+    // Estado para el Menú de Usuario
     const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
 
     const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -33,13 +43,19 @@ function TopAppBar() {
     const handleCloseUserMenu = () => {
         setAnchorElUser(null);
     };
-    // -------------------------------------
 
     const handleLogout = () => {
         handleCloseUserMenu(); // Cierra el menú primero
         logout();
         navigate('/login');
     };
+
+    // Navega al panel de admin (que redirige a la primera pestaña)
+    const goToAdminPanel = () => {
+        navigate('/admin'); // Navega a la ruta padre del layout admin
+        handleCloseUserMenu();
+    };
+
 
     return (
         <AppBar position="static" elevation={1}>
@@ -53,48 +69,46 @@ function TopAppBar() {
 
                 {/* Info Usuario y Logout / Botón Login */}
                 {isAuthenticated && currentUser ? (
-                    // --- Vista Usuario Autenticado (NUEVO LAYOUT) ---
+                    // Vista Usuario Autenticado
                     <Stack direction="row" spacing={1.5} alignItems="center">
 
-                        {/* TODO: Aquí iría el mapeo de Badges de Rol (Fase 2) */}
-                        {/* <Stack direction="row" spacing={0.5}> ... badges ... </Stack> */}
+                        {/* TODO: Placeholder para futuros Badges de Rol/Etiqueta */}
+                        {/* <Stack direction="row" spacing={0.5}>...</Stack> */}
 
                         {/* Nombre Usuario */}
-                        <Typography sx={{ display: { xs: 'none', sm: 'block' } }}> {/* Oculta nombre en pantallas muy pequeñas si es necesario */}
+                        <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontWeight: 500 }}>
                             {currentUser.name || currentUser.email}
                         </Typography>
 
                         {/* Icono Usuario Clickable */}
-                        <Tooltip title="Opciones de Usuario">
+                        <Tooltip title="Opciones">
                             <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                                {/* Usamos Avatar con iniciales */}
                                 <Avatar
                                     sx={{
                                         width: 32,
                                         height: 32,
                                         fontSize: '0.875rem',
-                                        // Podríamos añadir un color de fondo o borde si quisiéramos,
-                                        // pero por ahora lo dejamos simple.
-                                        // bgcolor: 'secondary.main'
+                                        bgcolor: 'secondary.light', // Puedes usar un color del tema
+                                        color: 'secondary.contrastText'
                                     }}
                                 >
                                     {getInitials(currentUser.name)}
                                 </Avatar>
-                                {/* Alternativa: Usar un icono genérico */}
-                                {/* <AccountCircleIcon sx={{ color: 'white' }} /> */}
                             </IconButton>
                         </Tooltip>
 
-                        {/* Menú de Usuario */}
+                        {/* Menú de Usuario (Posición Corregida) */}
                         <Menu
-                            sx={{ mt: '65px' }} // Ajusta el margen superior si es necesario
+                            // Quitamos sx={{ mt: '45px' }}
                             id="menu-appbar"
                             anchorEl={anchorElUser}
+                            // Origen del ancla: Debajo y a la derecha del botón
                             anchorOrigin={{
-                                vertical: 'top',
+                                vertical: 'bottom', // <-- Debajo del icono
                                 horizontal: 'right',
                             }}
                             keepMounted
+                            // Origen de la transformación: Esquina superior derecha del menú
                             transformOrigin={{
                                 vertical: 'top',
                                 horizontal: 'right',
@@ -102,27 +116,25 @@ function TopAppBar() {
                             open={Boolean(anchorElUser)}
                             onClose={handleCloseUserMenu}
                         >
-                            {/* --- NUEVO: Acceso al Panel de Control --- */}
+                            {/* Item Panel Admin (Condicional) */}
                             {(userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
-                                <MenuItem onClick={() => { navigate('/panel-control'); handleCloseUserMenu(); }}>
+                                <MenuItem onClick={goToAdminPanel}> {/* Llama a la función de navegación */}
                                     <AdminPanelSettingsIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
-                                    <Typography textAlign="center">Panel de Control</Typography>
+                                    <Typography textAlign="center">Panel Admin</Typography>
                                 </MenuItem>
                             )}
-                            {/* ----------------------------------------- */}
+                            {/* Puedes añadir más items aquí (ej. Mi Perfil) */}
 
-                            {/* TODO: Añadir aquí item "Mi Perfil/Configuración" */}
-
-                            {/* MenuItem para Logout */}
+                            {/* Item Logout */}
                             <MenuItem onClick={handleLogout}>
-                                <LogoutIcon sx={{ mr: 1, fontSize: '1.2rem' }} /> {/* Icono dentro del menú */}
+                                <LogoutIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
                                 <Typography textAlign="center">Cerrar Sesión</Typography>
                             </MenuItem>
                         </Menu>
 
                     </Stack>
                 ) : (
-                    // --- Vista Usuario No Autenticado (Sin cambios) ---
+                    // Vista Usuario No Autenticado
                     <Button color="inherit" component={RouterLink} to="/login">
                         Login
                     </Button>
@@ -134,5 +146,5 @@ function TopAppBar() {
 
 export default TopAppBar;
 // ========================================================================
-// FIN: Contenido MODIFICADO para TopAppBar.tsx (Fase 1: Layout y Menú Usuario)
+// FIN: Contenido COMPLETO y CORREGIDO para TopAppBar.tsx (v3 - Posición Menú)
 // ========================================================================
