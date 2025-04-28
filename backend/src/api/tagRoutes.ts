@@ -1,33 +1,36 @@
+// ========================================================================
+// INICIO: Contenido COMPLETO y CORREGIDO para tagRoutes.ts (Permisos Ajustados)
+// COPIA Y PEGA TODO ESTE BLOQUE EN TU ARCHIVO
+// ========================================================================
 // backend/src/api/tagRoutes.ts
 
 import express from 'express';
-import * as tagController from '../controllers/tagController'; // Importa los handlers del controlador
-import { authenticateToken } from '../middlewares/authMiddleware'; // Middleware para verificar JWT
-import { authorizeRole } from '../middlewares/roleMiddleware'; // Middleware para verificar Rol
-import { validateRequest } from '../middlewares/validationMiddleware'; // Middleware para validar con Zod
-import { tagIdSchema, createTagSchema, updateTagSchema } from '../schemas/tagSchemas'; // Importa los schemas Zod
-import { Role } from '@prisma/client'; // Importa el Enum Role
+import * as tagController from '../controllers/tagController';
+import { authenticateToken } from '../middlewares/authMiddleware';
+import { authorizeRole } from '../middlewares/roleMiddleware';
+import { validateRequest } from '../middlewares/validationMiddleware';
+import { tagIdSchema, createTagSchema, updateTagSchema } from '../schemas/tagSchemas';
+import { Role } from '@prisma/client';
 
 const router = express.Router();
 
 // === RUTAS PARA ETIQUETAS ===
-// Todas estas rutas asumirán que se montan bajo un prefijo como /api/admin/tags
-// y requieren rol de ADMIN.
+// Base: /api/admin/tags (montado en server.ts)
 
 // GET / - Obtener todas las etiquetas
 router.get(
     '/',
-    authenticateToken,             // 1. Verifica token JWT
-    authorizeRole([Role.ADMIN]),   // 2. Verifica que el rol sea ADMIN
-    tagController.getAllTagsHandler  // 3. Llama al controlador
+    authenticateToken,
+    authorizeRole([Role.ADMIN, Role.COORDINADOR]), // <-- CORREGIDO
+    tagController.getAllTagsHandler
 );
 
 // POST / - Crear una nueva etiqueta
 router.post(
     '/',
     authenticateToken,
-    authorizeRole([Role.ADMIN]),
-    validateRequest({ body: createTagSchema }), // 4. Valida el cuerpo de la petición
+    authorizeRole([Role.ADMIN, Role.COORDINADOR]), // <-- CORREGIDO
+    validateRequest({ body: createTagSchema }),
     tagController.createTagHandler
 );
 
@@ -35,8 +38,8 @@ router.post(
 router.get(
     '/:id',
     authenticateToken,
-    authorizeRole([Role.ADMIN]),
-    validateRequest({ params: tagIdSchema }), // 4. Valida el parámetro :id de la URL
+    authorizeRole([Role.ADMIN, Role.COORDINADOR]), // <-- CORREGIDO
+    validateRequest({ params: tagIdSchema }),
     tagController.getTagByIdHandler
 );
 
@@ -44,8 +47,8 @@ router.get(
 router.put(
     '/:id',
     authenticateToken,
-    authorizeRole([Role.ADMIN]),
-    validateRequest({ params: tagIdSchema, body: updateTagSchema }), // 4. Valida ID y cuerpo
+    authorizeRole([Role.ADMIN, Role.COORDINADOR]), // <-- CORREGIDO
+    validateRequest({ params: tagIdSchema, body: updateTagSchema }),
     tagController.updateTagHandler
 );
 
@@ -53,10 +56,12 @@ router.put(
 router.delete(
     '/:id',
     authenticateToken,
-    authorizeRole([Role.ADMIN]),
-    validateRequest({ params: tagIdSchema }), // 4. Valida el parámetro :id
+    authorizeRole([Role.ADMIN]), // <-- MANTENIDO SOLO ADMIN (O cambia si quieres)
+    validateRequest({ params: tagIdSchema }),
     tagController.deleteTagHandler
 );
 
-// Exporta el router configurado
 export default router;
+// ========================================================================
+// FIN: Contenido COMPLETO y CORREGIDO para tagRoutes.ts (Permisos Ajustados)
+// ========================================================================

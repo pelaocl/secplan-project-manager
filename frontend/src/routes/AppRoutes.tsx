@@ -11,7 +11,9 @@ const LoginPage = lazy(() => import('../pages/LoginPage'));
 const ProjectListPage = lazy(() => import('../pages/ProjectListPage'));
 const ProjectDetailPage = lazy(() => import('../pages/ProjectDetailPage'));
 const ProjectCreatePage = lazy(() => import('../pages/ProjectCreatePage'));
-const ProjectEditPage = lazy(() => import('../pages/ProjectEditPage'));
+//const ProjectEditPage = lazy(() => import('../pages/ProjectEditPage'));
+import ProjectEditPage from '../pages/ProjectEditPage';
+
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
 const AdminUsersPage = lazy(() => import('../pages/AdminUsersPage'));
 const AdminTagsPage = lazy(() => import('../pages/AdminTagsPage'));
@@ -33,9 +35,12 @@ function AppRoutes() {
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
 
                 {/* --- Rutas Protegidas por Login --- */}
-                <Route element={<ProtectedRoute />}>
-                    <Route path="/projects/:id/edit" element={<ProjectEditPage />} />
-                </Route>
+                <Route path="/projects/:id/edit" element={
+                        <ProtectedRoute> {/* Protección básica de login */}
+                            <ProjectEditPage /> {/* Sigue usando importación directa por ahora */}
+                        </ProtectedRoute>
+                    } 
+                />
 
                  {/* --- Rutas Comunes Admin/Coord (SIN Panel Control) --- */}
                  <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.COORDINADOR]} />}>
