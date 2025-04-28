@@ -13,6 +13,7 @@ export interface User {
   name?: string | null;
   role: UserRole;
   isActive?: boolean;
+  etiquetas?: Etiqueta[];
 }
 
 // Interface básica para objetos Project

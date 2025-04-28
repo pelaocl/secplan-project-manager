@@ -10,6 +10,7 @@ import lookupRoutes from './api/lookupRoutes';
 import adminRoutes from './api/adminRoutes';
 import tagRoutes from './api/tagRoutes';
 import lookupAdminRoutes from './api/lookupAdminRoutes';
+import adminUserRoutes from './api/adminUserRoutes';
 import { NotFoundError, AppError } from './utils/errors';
 import prisma from './config/prismaClient';
 
@@ -25,7 +26,7 @@ app.use(cors({ origin: process.env.FRONTEND_URL || '*', methods: ['GET', 'POST',
 
 // --- API Routes ---
 // ... (/, auth, projects, lookups, admin - sin cambios)
-app.get('/', (req: Request, res: Response) => { res.send('SECPLAN Project Manager API'); }); app.use(`${API_PREFIX}/auth`, authRoutes); app.use(`${API_PREFIX}/projects`, projectRoutes); app.use(`${API_PREFIX}/lookups`, lookupRoutes); app.use(`${API_PREFIX}/admin`, adminRoutes); app.use(`${API_PREFIX}/admin/tags`, tagRoutes); app.use(`${API_PREFIX}/admin/lookups`, lookupAdminRoutes);
+app.get('/', (req: Request, res: Response) => { res.send('SECPLAN Project Manager API'); }); app.use(`${API_PREFIX}/auth`, authRoutes); app.use(`${API_PREFIX}/projects`, projectRoutes); app.use(`${API_PREFIX}/lookups`, lookupRoutes); app.use(`${API_PREFIX}/admin`, adminRoutes); app.use(`${API_PREFIX}/admin/tags`, tagRoutes); app.use(`${API_PREFIX}/admin/lookups`, lookupAdminRoutes); app.use(`${API_PREFIX}/admin/users`, adminUserRoutes);
 
 // --- 404 Handler ---
 app.use((req: Request, res: Response, next: NextFunction) => {
