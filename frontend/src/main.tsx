@@ -7,6 +7,7 @@ import theme from './theme/theme'; // Asegúrate que theme.ts exista y exporte u
 import './index.css'; // Asegúrate que index.css exista
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import 'react-quill-new/dist/quill.snow.css';
 
 // Obtiene el elemento raíz (debe existir en index.html)
 const rootElement = document.getElementById('root');

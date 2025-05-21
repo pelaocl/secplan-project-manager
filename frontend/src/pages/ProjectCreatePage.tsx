@@ -10,6 +10,7 @@ import { FormOptionsResponse, Project, DEFAULT_TIPO_MONEDA } from '../types';
 import { projectFormSchema, ProjectFormValues } from '../schemas/projectFormSchema';
 import ProjectForm from '../components/ProjectForm';
 import { ApiError } from '../services/apiService';
+import DOMPurify from 'dompurify';
 
 function ProjectCreatePage() {
   const navigate = useNavigate();
@@ -55,6 +56,20 @@ function ProjectCreatePage() {
  // Handler para envío exitoso (con ambos logs)
   const onValidSubmit: SubmitHandler<ProjectFormValues> = async (data) => {
     console.log('[FRONTEND] RHF Raw Values (getValues):', JSON.stringify(getValues(), null, 2));
+
+    // Sanitizar el campo descripción
+    const sanitizedDescription = data.descripcion
+        ? DOMPurify.sanitize(data.descripcion, {
+            ALLOWED_TAGS: ['h1', 'h2', 'h3', 'p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'img', 'br'],
+            ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
+          })
+        : null; // O '' si prefieres string vacío en lugar de null para el backend
+
+    const dataToSend = {
+        ...data,
+        descripcion: sanitizedDescription,
+    };
+
     console.log('[FRONTEND] Data from form after Zod validation (onSubmit):', JSON.stringify(data, null, 2));
     setIsSubmitting(true); setApiError(null); setSuccessMessage(null);
     try {

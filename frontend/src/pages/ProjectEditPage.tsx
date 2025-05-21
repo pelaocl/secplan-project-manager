@@ -15,6 +15,7 @@ import ProjectForm from '../components/ProjectForm';
 import { projectFormSchema, ProjectFormSchemaType } from '../schemas/projectFormSchema';
 import { FormOptionsResponse, Project } from '../types';
 import { ApiError } from '../services/apiService';
+import DOMPurify from 'dompurify';
 
 function ProjectEditPage() {
     console.log('[ProjectEditPage] Renderizando...'); // Log inicial
@@ -104,6 +105,20 @@ function ProjectEditPage() {
     // Submit
     const onValidSubmit = async (formData: ProjectFormSchemaType) => {
         if (!projectData) return;
+
+        // Sanitizar el campo descripción
+        const sanitizedDescription = formData.descripcion
+            ? DOMPurify.sanitize(formData.descripcion, {
+                ALLOWED_TAGS: ['h1', 'h2', 'h3', 'p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'img', 'br'],
+                ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
+            })
+            : null;
+
+        const dataToSend = {
+            ...formData,
+            descripcion: sanitizedDescription,
+        };
+
         setIsSubmitting(true); setError(null); setSuccessMessage(null);
         console.log("Datos enviados para actualizar:", formData);
         try {

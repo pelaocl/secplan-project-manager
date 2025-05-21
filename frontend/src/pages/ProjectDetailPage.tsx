@@ -1,6 +1,3 @@
-// ========================================================================
-// INICIO: Contenido v14 para ProjectDetailPage.tsx (Restaura Estilos Banner)
-// ========================================================================
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
@@ -132,8 +129,55 @@ function ProjectDetailPage() {
                  {isAuthenticated && ( <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Bitácora del Proyecto</Typography> <Divider sx={{ mb: 2 }} /> <Typography variant="body2" color="text.secondary"> (Funcionalidad pendiente) </Typography> </SectionPaper> </Grid> )}
                  {/* 3. Sección Información Básica (Usa SectionPaper) */}
                  <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Información Básica</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> {/* ... Grid items con IconDetailItem ... */ } <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={BusinessIcon} label="Unidad Municipal" value={project.unidad?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CategoryIcon} label="Tipología" value={project.tipologia?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={InfoOutlinedIcon} label="Estado Actual" value={project.estado?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CalendarTodayIcon} label="Año Iniciativa" value={project.ano} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Línea Financ." value={project.lineaFinanciamiento?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Ref. (${project.tipoMoneda})`} value={formatCurrency(project.monto, project.tipoMoneda)} /> </Grid> {isAuthenticated && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Proyectista" value={project.proyectista ? `${project.proyectista.name || '?'} (${project.proyectista.email})` : null} /> </Grid>} {isAuthenticated && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Formulador" value={project.formulador ? `${project.formulador.name || '?'} (${project.formulador.email})` : null} /> </Grid>} {isAuthenticated && project.colaboradores && project.colaboradores.length > 0 && ( <Grid item xs={12} md={4}> <IconDetailItem icon={GroupsIcon} label="Nº Colaboradores" value={project.colaboradores.length.toString()} /> </Grid> )} </Grid> </SectionPaper> </Grid>
-                 {/* 4. Sección Descripción (Usa SectionPaper) */}
-                 {project.descripcion && ( <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Descripción (Interna)</Typography> <Divider sx={{ mb: 2 }} /> <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{project.descripcion}</Typography> </SectionPaper> </Grid> )}
+                 
+                 
+                {/* 4. Sección Descripción (Usa SectionPaper) */}
+                {/* Modifica este bloque: */}
+                {project.descripcion ? ( // Verifica si hay descripción
+                    <Grid item xs={12}>
+                        <SectionPaper elevation={2}>
+                            <Typography variant="h6" gutterBottom>Descripción del Proyecto</Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            <Box
+                                className="quill-content-display" // Clase opcional para estilos CSS globales si prefieres
+                                sx={{ 
+                                    lineHeight: 1.5, // Un espaciado de línea base agradable
+                                    // Estilos básicos para los elementos comunes de Quill usando la prop 'sx' de MUI
+                                    // Estos estilos usan el 'theme' que ya obtienes con useTheme()
+                                    '& h1': { my: theme.spacing(2), fontSize: '1.75rem', fontWeight: 'bold' },
+                                    '& h2': { my: theme.spacing(1.5), fontSize: '1.5rem', fontWeight: 'bold' },
+                                    '& h3': { my: theme.spacing(1), fontSize: '1.25rem', fontWeight: 'bold' },
+                                    '& p': { mb: theme.spacing(1.5) }, // Margen inferior para párrafos
+                                    '& ul, & ol': { pl: theme.spacing(3), mb: theme.spacing(1.5) }, // Padding para listas
+                                    '& a': { color: theme.palette.primary.main, textDecoration: 'underline' },
+                                    '& img': { 
+                                        maxWidth: '100%', 
+                                        height: 'auto', 
+                                        my: theme.spacing(1), 
+                                        borderRadius: theme.shape.borderRadius, // Usa el borde redondeado del tema
+                                        display: 'block', // Para que my (margin-top/bottom) funcione bien
+                                    },
+                                    // Puedes añadir más estilos para 'blockquote', 'pre', etc., si los habilitaste en Quill
+                                }}
+                                dangerouslySetInnerHTML={{ __html: project.descripcion }} // <-- ¡La magia sucede aquí!
+                            />
+                        </SectionPaper>
+                    </Grid>
+                ) : (
+                    // Opcional: Si quieres mostrar algo cuando no hay descripción y el usuario está autenticado
+                    isAuthenticated && (
+                        <Grid item xs={12}>
+                            <SectionPaper elevation={2}>
+                                <Typography variant="h6" gutterBottom>Descripción (Interna)</Typography>
+                                <Divider sx={{ mb: 2 }} />
+                                <Typography variant="body2" color="text.secondary">
+                                    (No se ha proporcionado una descripción para este proyecto)
+                                </Typography>
+                            </SectionPaper>
+                        </Grid>
+                    )
+                )}
+                                  
                  {/* 5. Sección Ubicación y Superficies (Usa SectionPaper) */}
                  <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Ubicación y Superficies</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> {/* ... Grid items con IconDetailItem ... */ } <Grid item xs={12} md={6}> <IconDetailItem icon={TravelExploreIcon} label="Sector" value={project.sector?.nombre} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Terreno (m²)" value={project.superficieTerreno?.toLocaleString('es-CL')} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Edificación (m²)" value={project.superficieEdificacion?.toLocaleString('es-CL')} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={LocationOnIcon} label="Dirección" value={project.direccion} /> </Grid> </Grid> </SectionPaper> </Grid>
                 {/* --- Grupo Lado a Lado (Usa SectionPaper) --- */}
@@ -155,6 +199,3 @@ function ProjectDetailPage() {
 }
 
 export default ProjectDetailPage;
-// ========================================================================
-// FIN: Contenido v14 para ProjectDetailPage.tsx (Restaura Estilos Banner)
-// ========================================================================
