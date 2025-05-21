@@ -20,6 +20,15 @@ export const listProjectsSchema = z.object({
     sectorId: z.string().optional().transform((val: string | undefined) => val ? parseInt(val, 10) : undefined).pipe(z.number().int().positive().optional()),
 });
 
+// Definición base de un objeto GeoJSON muy genérico para validación
+// Esto es muy básico, podrías hacerlo más específico si quieres,
+// por ejemplo, para validar la presencia de 'type' y 'coordinates'.
+const geoJsonSchema = z.object({
+    type: z.string(),
+    coordinates: z.array(z.any()),
+    // permite otras propiedades como 'properties', 'bbox', etc.
+}).passthrough().optional().nullable();
+
 // Base schema for common fields (used in create and update)
 const projectBaseSchema = z.object({
     nombre: z.string().min(3, "Nombre requiere al menos 3 caracteres"),
@@ -67,6 +76,10 @@ const projectBaseSchema = z.object({
         z.number().positive("Monto Adjudicado debe ser positivo").optional().nullable()
     ),
     codigoLicitacion: z.string().optional().nullable(),
+
+    // --- Nuevos campos de Geometría ---
+    location_point: geoJsonSchema,
+    area_polygon: geoJsonSchema,
 });
 
 // Schema for Creating a Project

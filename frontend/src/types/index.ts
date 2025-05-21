@@ -51,6 +51,8 @@ export interface Project {
   lineaFinanciamiento?: { id: number; nombre: string } | null;
   programa?: { id: number; nombre: string; lineaFinanciamientoId: number; } | null; // Añadido lineaFinanciamientoId a Programa si API lo devuelve
   etapaActualFinanciamiento?: { id: number; nombre: string } | null;
+  location_point?: GeoJSONPoint | null;
+  area_polygon?: GeoJSONPolygon | null;
 }
 
 

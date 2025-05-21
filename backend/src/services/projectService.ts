@@ -47,6 +47,8 @@ const getProjectSelectFields = (user?: AuthenticatedUser): Prisma.ProjectSelect 
     const publicFields: Prisma.ProjectSelect = {
         id: true, codigoUnico: true, nombre: true, direccion: true, superficieTerreno: true,
         superficieEdificacion: true, ano: true, proyectoPriorizado: true, createdAt: true, updatedAt: true,
+        location_point: true,
+        area_polygon: true,
         estado: { select: { id: true, nombre: true } },
         unidad: { select: { id: true, nombre: true, abreviacion: true } },
         tipologia: { select: { id: true, nombre: true, abreviacion: true, colorChip: true } },
@@ -230,6 +232,9 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
         montoAdjudicado: parseDecimalOptional(data.montoAdjudicado),
         codigoLicitacion: data.codigoLicitacion ?? null,
 
+        location_point: data.location_point, // Asigna directamente el objeto GeoJSON o null/undefined
+        area_polygon: data.area_polygon,   // Asigna directamente el objeto GeoJSON o null/undefined
+
         // --- Conexiones a relaciones ---
         tipologia: { connect: { id: data.tipologiaId } }, // Requerido
         estado: data.estadoId ? { connect: { id: Number(data.estadoId) } } : undefined,
@@ -333,6 +338,13 @@ export const updateProject = async (id: number, data: UpdateProjectInput, user: 
     // Campos de fecha parseados
     if ('fechaPostulacion' in data) updateData.fechaPostulacion = parseDateOptional(data.fechaPostulacion);
 
+    if ('location_point' in data) {
+        updateData.location_point = data.location_point; // Puede ser el objeto GeoJSON o null
+    }
+    if ('area_polygon' in data) {
+        updateData.area_polygon = data.area_polygon;   // Puede ser el objeto GeoJSON o null
+    }
+ 
     // --- Manejo de Relaciones ---
     // Nota: Usamos 'in' para verificar si la propiedad existe en 'data',
     // incluso si su valor es 'null' o 'undefined'.

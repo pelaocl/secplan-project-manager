@@ -7,6 +7,19 @@ const preprocessOptionalNumberInput = (val: unknown): unknown => {
     return val; // Devuelve el string numérico u otro valor para que coerce actúe
 };
 
+// --- NUEVO: Schema base para objetos GeoJSON en el formulario ---
+// Este schema es bastante permisivo. Valida que sea un objeto con 'type' y 'coordinates',
+// y permite otras propiedades. Se hace opcional y nulable.
+const geoJsonFormSchema = z.object({
+   type: z.string({ required_error: "GeoJSON type es requerido" })
+     .min(1, "GeoJSON type no puede estar vacío"),
+   coordinates: z.array(z.any(), { required_error: "GeoJSON coordinates son requeridas" })
+     .min(1, "GeoJSON coordinates no pueden estar vacías"),
+   // Permite otras propiedades como 'properties', 'bbox', etc.
+ }).passthrough().deepPartial().optional().nullable(); // deepPartial() hace que todo dentro sea opcional, útil si se arma por partes
+ // Alternativamente, si esperas que el objeto esté completo o nulo:
+ // }).passthrough().optional().nullable();
+
 // Schema Zod REFINADO para el formulario de Proyecto en el Frontend
 export const projectFormSchema = z.object({
   // --- Información Básica ---
@@ -70,6 +83,8 @@ export const projectFormSchema = z.object({
      z.coerce.number({ invalid_type_error: "Monto Adjudicado debe ser número" }).positive("Monto Adjudicado debe ser positivo").nullable()
   ),
   codigoLicitacion: z.string().optional().nullable(),
+  location_point: geoJsonFormSchema,
+  area_polygon: geoJsonFormSchema,
 });
 
 // Tipo inferido (sin cambios)

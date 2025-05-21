@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { ProjectFormValues } from '../schemas/projectFormSchema';
 import { FormOptionsResponse, ProgramaOption, UserOption } from '../types'; // Removido DEFAULT_TIPO_MONEDA si no se usa aquí
+import ProjectFormMap from './ProjectFormMap'; // Importa el nuevo componente de mapa
 
 interface ProjectFormProps {
     isLoading?: boolean;
@@ -179,6 +180,38 @@ function ProjectForm({ isLoading = false, lookupOptions, isEditMode = false, con
                          {/* Código Licitación (Opcional, maneja null) */}
                         <Grid item xs={12} sm={6} md={4}><Controller name="codigoLicitacion" control={control} render={({ field }) => ( <TextField {...field} value={field.value ?? ''} label="Código Licitación" fullWidth error={!!errors.codigoLicitacion} helperText={errors.codigoLicitacion?.message} disabled={isLoading} variant="outlined"/> )}/></Grid>
                     </Grid>
+                </Paper>
+            </Grid>
+
+
+            {/* --- NUEVA SECCIÓN: Ubicación Geográfica (Mapa) --- */}
+            <Grid item xs={12}>
+                <Paper elevation={2} sx={{ p: { xs: 2, md: 3 }, mt: 2 }}> {/* mt para un poco de espacio arriba */}
+                    <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                        Ubicación Geográfica
+                    </Typography>
+                    {/* +                        No necesitamos <Controller> para el mapa en sí si ProjectFormMap maneja setValue.
+                        Pero sí podrías querer mostrar errores de validación de Zod aquí si los hubiera.
+                    */}
+                    <ProjectFormMap
+                        setValue={setValue}
+                        watch={watch}
+                    />
+                    {/* Mensajes de error para los campos del mapa (si Zod los reporta) */}
+                    {errors.location_point && (
+                        <FormHelperText error sx={{ mt: 1 }}>
+                            {typeof errors.location_point.message === 'string'
+                                ? errors.location_point.message
+                                : 'Error en la ubicación del punto.'}
+                        </FormHelperText>
+                    )}
+                    {errors.area_polygon && (
+                        <FormHelperText error sx={{ mt: 1 }}>
+                           {typeof errors.area_polygon.message === 'string'
+                                ? errors.area_polygon.message
+                                : 'Error en el polígono del área.'}
+                        </FormHelperText>
+                    )}
                 </Paper>
             </Grid>
 

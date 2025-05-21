@@ -100,12 +100,12 @@ model Project {
   montoAdjudicado       Decimal? @db.Decimal(15, 2)
   codigoLicitacion      String?
 
+  // --- Campos de Geometría ---
+  location_point        Json?    // Para GeoJSON de un Punto
+  area_polygon          Json?    // Para GeoJSON de un Polígono
+
   // Relaciones futuras
   tareas Tarea[] // Para bitácora
-
-  // Campos Geometría (Excluidos Inicialmente)
-  // location_point    Geometry?
-  // area_polygon      Geometry?
 
   @@map("proyectos")
 }

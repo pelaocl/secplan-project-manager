@@ -87,6 +87,8 @@ function ProjectEditPage() {
                  fechaPostulacion: fetchedProject.fechaPostulacion ? new Date(fetchedProject.fechaPostulacion).toISOString().split('T')[0] : '', // '' para input date
                  montoAdjudicado: fetchedProject.montoAdjudicado?.toString() ?? '',
                  codigoLicitacion: fetchedProject.codigoLicitacion ?? '',
+                 location_point: fetchedProject.location_point ?? null, // Usa null si no existe
+                 area_polygon: fetchedProject.area_polygon ?? null,     // Usa null si no existe
              };
 
             console.log("[ProjectEditPage] defaultFormData construido:", defaultFormData);

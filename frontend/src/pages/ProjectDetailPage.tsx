@@ -82,8 +82,15 @@ function ProjectDetailPage() {
                 }}
             >
                  {/* Mapa */}
-                 <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}> <ProjectMap /> </Box>
-                 {/* Overlay */}
+                 <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
+                    <ProjectMap
+                        locationPoint={project.location_point} // Pasa el punto
+                        areaPolygon={project.area_polygon}     // Pasa el polígono
+                        // Opcionalmente, puedes definir un defaultZoom o defaultCenter aquí si quieres
+                        // que sea diferente para cada proyecto, o dejar los que tiene ProjectMap.tsx
+                    />
+                </Box>
+                {/* Overlay */}
                  <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 100%)' }} />
                  {/* Título y Chip (Inferior) - ESTILOS RESTAURADOS */}
                  <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3, p: { xs: 2, md: 3 }, color: 'common.white', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2 }}>
