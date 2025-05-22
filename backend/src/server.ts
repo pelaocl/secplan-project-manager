@@ -10,15 +10,17 @@ import jwt from 'jsonwebtoken'; // <--- Para verificar JWT en sockets
 
 import authRoutes from './api/authRoutes';
 import projectRoutes from './api/projectRoutes';
+import taskRoutes from './api/taskRoutes';
 import lookupRoutes from './api/lookupRoutes';
-import adminRoutes from './api/adminRoutes'; // Asumo que esta es una ruta general de admin
-import tagRoutes from './api/tagRoutes'; // Corregido: estas eran tus rutas específicas
+import adminRoutes from './api/adminRoutes'; 
+import tagRoutes from './api/tagRoutes'; 
 import lookupAdminRoutes from './api/lookupAdminRoutes';
 import adminUserRoutes from './api/adminUserRoutes';
-import { NotFoundError, AppError } from './utils/errors'; // Asumo que handleErrors está en utils/errors también
+import { NotFoundError, AppError } from './utils/errors'; 
 import prisma from './config/prismaClient';
 
-import { UserPayload } from './types/express'; // <--- ¡ASEGÚRATE DE TENER ESTE TIPO DEFINIDO Y EXPORTADO!
+import { UserPayload } from './types/express'; 
+import { initializeSocketManager } from './socketManager'; 
 
 dotenv.config();
 
@@ -43,7 +45,7 @@ app.use(morgan('dev'));
 // --- API Routes ---
 app.get('/', (req: Request, res: Response) => { res.send('SECPLAN Project Manager API'); }); 
 app.use(`${API_PREFIX}/auth`, authRoutes); 
-app.use(`${API_PREFIX}/projects`, projectRoutes); 
+//app.use(`${API_PREFIX}/projects`, projectRoutes); 
 app.use(`${API_PREFIX}/lookups`, lookupRoutes); 
 app.use(`${API_PREFIX}/admin/tags`, tagRoutes); 
 app.use(`${API_PREFIX}/admin/lookups`, lookupAdminRoutes); 
@@ -51,6 +53,9 @@ app.use(`${API_PREFIX}/admin/users`, adminUserRoutes);
 // Si adminRoutes es una ruta general que agrupa otras, asegúrate que no haya conflictos
 // con las rutas más específicas de arriba. Si es independiente, está bien.
 app.use(`${API_PREFIX}/admin`, adminRoutes); 
+
+app.use(`${API_PREFIX}/projects/:projectId/tasks`, taskRoutes); // Esto requiere que projectIdSchema se valide aquí o en taskRoutes.
+app.use(`${API_PREFIX}/projects`, projectRoutes);
 
 // --- 404 Handler ---
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -91,6 +96,8 @@ const io = new SocketIOServer(httpServer, {
         methods: ["GET", "POST"] // Métodos permitidos para la conexión inicial de Socket.IO
     }
 });
+
+initializeSocketManager(io); // <-- AÑADIR ESTA LÍNEA después de crear 'io'
 
 // Middleware de Autenticación para Socket.IO
 io.use((socket: Socket, next) => {

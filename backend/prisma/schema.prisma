@@ -23,26 +23,66 @@ enum TipoMoneda {
   UF
 }
 
+enum EstadoTarea {
+  PENDIENTE
+  EN_PROGRESO
+  COMPLETADA
+  EN_REVISION // Ejemplo, si el coordinador necesita revisar antes de cerrar
+  CANCELADA
+}
+
+enum PrioridadTarea {
+  ALTA
+  MEDIA
+  BAJA
+}
+
+enum TipoNotificacion {
+  NUEVA_TAREA_ASIGNADA
+  NUEVO_MENSAJE_TAREA
+  TAREA_ACTUALIZADA_ESTADO
+  TAREA_ACTUALIZADA_INFO // Para otros cambios en la tarea
+  TAREA_COMPLETADA
+  TAREA_VENCIMIENTO_PROXIMO // (Este requeriría un job en el backend para generarse)
+  // Puedes añadir más tipos según necesites
+}
+
+enum TipoRecursoNotificacion {
+  TAREA
+  MENSAJE_CHAT_TAREA
+  PROYECTO // Por si quieres notificaciones a nivel de proyecto
+}
+
 // --- MODELS ---
 
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String   // Hashed password
+  password  String
   name      String?
   role      Role     @default(USUARIO)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relaciones
-  etiquetas        Etiqueta[] @relation("UserEtiquetas")
-  proyectosCreados Project[]  @relation("ProyectistaProjects")
-  proyectosFormulados Project[] @relation("FormuladorProjects")
-  proyectosColabora Project[]  @relation("ProjectCollaborators")
-  tareasAsignadas Tarea[]    // Para futura bitácora
+  // Relaciones existentes
+  etiquetas           Etiqueta[] @relation("UserEtiquetas")
+  proyectosCreados    Project[]  @relation("ProyectistaProjects") // Asumo que este es el "proyectista" principal del proyecto
+  proyectosFormulados Project[]  @relation("FormuladorProjects")
+  proyectosColabora   Project[]  @relation("ProjectCollaborators")
+  
+  // Relaciones con Tarea (actualizar la existente y añadir la nueva)
+  tareasAsignadas     Tarea[]    @relation("TareasAsignadasAUsuario") // Campo para tareas donde el usuario es el 'asignado'
+  tareasCreadas       Tarea[]    @relation("TareasCreadasPorUsuario")   // NUEVO: Tareas creadas por este usuario
 
-  @@map("users") // Renombra la tabla en la BD
+  // Relaciones con MensajeChatTarea y Notificacion (NUEVAS)
+  mensajesEnviados    MensajeChatTarea[] @relation("MensajesEnviadosPorUsuario")
+  notificaciones      Notificacion[]     @relation("NotificacionesParaUsuario")
+
+  // Para "leído por" en MensajeChatTarea (si lo implementas en v2):
+  // mensajesLeidos      MensajeChatTarea[] @relation("MensajesLeidosPorUsuarios")
+
+  @@map("users")
 }
 
 model Etiqueta {
@@ -177,19 +217,63 @@ model EtapaFinanciamiento {
 
 // Modelo Básico para futura Bitácora
 model Tarea {
-  id          Int      @id @default(autoincrement())
-  titulo      String
-  descripcion String?
-  fechaPlazo  DateTime?
-  completada  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 Int          @id @default(autoincrement())
+  titulo             String
+  descripcion        String?      // Almacenará HTML del editor de texto enriquecido
+  fechaCreacion      DateTime     @default(now())
+  fechaActualizacion DateTime     @updatedAt
+  fechaPlazo         DateTime?    // Deadline para la tarea
 
-  proyectoId  Int
-  proyecto    Project  @relation(fields: [proyectoId], references: [id], onDelete: Cascade) // Borrar tareas si se borra el proyecto
+  estado             EstadoTarea  @default(PENDIENTE) // Usa el Enum definido arriba
+  prioridad          PrioridadTarea? // Opcional
 
-  asignadoId  Int?
-  asignado    User?    @relation(fields: [asignadoId], references: [id])
+  proyectoId         Int
+  proyecto           Project      @relation(fields: [proyectoId], references: [id], onDelete: Cascade) // Si se borra el proyecto, se borran sus tareas
 
-  @@map("tareas_bitacora")
+  creadorId          Int          // Quién creó la tarea (Coordinador/Admin)
+  creador            User         @relation("TareasCreadasPorUsuario", fields: [creadorId], references: [id])
+
+  asignadoId         Int?         // El principal responsable (Proyectista)
+  asignado           User?        @relation("TareasAsignadasAUsuario", fields: [asignadoId], references: [id])
+
+  // Relación uno-a-muchos con los mensajes del chat
+  mensajes           MensajeChatTarea[]
+
+  @@map("tareas_bitacora") // Mantienes el nombre de tu tabla
+}
+
+model MensajeChatTarea {
+  id           Int      @id @default(autoincrement())
+  contenido    String   // Almacenará HTML del editor de texto enriquecido
+  fechaEnvio   DateTime @default(now())
+
+  tareaId      Int
+  tarea        Tarea    @relation(fields: [tareaId], references: [id], onDelete: Cascade) // Si se borra la tarea, se borran sus mensajes
+
+  remitenteId  Int
+  remitente    User     @relation("MensajesEnviadosPorUsuario", fields: [remitenteId], references: [id])
+
+  // Para "leído por" (avanzado, considera para una v2):
+  // leidoPor     User[]   @relation("MensajesLeidosPorUsuarios")
+
+  @@map("mensajes_chat_tarea")
+}
+
+model Notificacion {
+  id            Int      @id @default(autoincrement())
+  mensaje       String   // Texto de la notificación
+  leida         Boolean  @default(false)
+  fechaCreacion DateTime @default(now())
+  urlDestino    String?  // Ej: /projects/1/tasks/5
+
+  tipo          TipoNotificacion
+  
+  usuarioId     Int      // El usuario que recibe la notificación
+  usuario       User     @relation("NotificacionesParaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // Campos para vincular la notificación a un recurso específico
+  recursoId     Int?     // ID de la Tarea, MensajeChatTarea, etc.
+  recursoTipo   TipoRecursoNotificacion?
+
+  @@map("notificaciones")
 }
