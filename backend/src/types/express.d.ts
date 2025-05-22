@@ -5,8 +5,9 @@ import { Role } from '@prisma/client';
 interface UserPayload {
     id: number;
     role: Role;
+    name?: string | null;
     email: string;
-    name?: string;
+
 }
 
 // Usa la declaración global para extender el espacio de nombres de Express

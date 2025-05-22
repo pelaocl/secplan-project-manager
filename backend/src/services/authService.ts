@@ -32,10 +32,11 @@ export const loginUser = async (credentials: LoginInput) => {
     }
 
     const tokenPayload = {
-        userId: user.id,
+        id: user.id,
         role: user.role,
-        // Puedes añadir otros datos no sensibles al payload si lo necesitas
-        // email: user.email, // Ejemplo
+        name: user.name,
+        email: user.email,
+
     };
 
     // --- CORRECCIÓN APLICADA ---

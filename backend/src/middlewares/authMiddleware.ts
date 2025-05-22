@@ -1,8 +1,10 @@
+// backend/src/middlewares/authMiddleware.ts
+
 import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { AuthenticatedRequest } from '../types/express'; // Importa el tipo extendido
-import { UnauthorizedError } from '../utils/errors'; // Importa el error específico
-import prisma from '../config/prismaClient'; // Importa la instancia de Prisma
+import { AuthenticatedRequest, UserPayload } from '../types/express'; // Asegúrate que UserPayload esté importado
+import { UnauthorizedError, AppError } from '../utils/errors'; // AppError añadido si es que se usa en este archivo
+import prisma from '../config/prismaClient';
 
 export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
@@ -10,7 +12,7 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
 
     if (!token) {
         // Permite continuar sin usuario para rutas potencialmente públicas.
-        // El middleware authorizeRole se encargará de bloquear si se requiere rol.
+        // El middleware authorizeRole (si lo tienes) se encargará de bloquear si se requiere rol.
         return next();
     }
 
@@ -18,35 +20,57 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
         const jwtSecret = process.env.JWT_SECRET;
         if (!jwtSecret) {
             console.error("FATAL ERROR: JWT_SECRET no está configurado en .env");
-            // No expongas este error directamente al cliente en producción
-            return next(new Error('Error de configuración del servidor.'));
+            // Es mejor lanzar un error que el manejador global pueda atrapar de forma consistente.
+            throw new AppError('Error de configuración del servidor.', 500); // O un Error genérico
         }
 
-        const decoded = jwt.verify(token, jwtSecret) as { userId: number; role: string; iat: number; exp: number };
+        // --- MODIFICACIÓN AQUÍ ---
+        // Usa el tipo UserPayload para el objeto decodificado.
+        // UserPayload debe coincidir con lo que authService.ts pone en el token.
+        const decoded = jwt.verify(token, jwtSecret) as UserPayload; 
 
         // Verifica si el usuario aún existe y está activo en la BD
-        const user = await prisma.user.findUnique({
-            where: { id: decoded.userId },
-            select: { id: true, role: true, isActive: true, email: true, name: true } // Selecciona los campos que necesites en req.user
+        // --- MODIFICACIÓN AQUÍ ---
+        // Usa decoded.id en lugar de decoded.userId
+        const userFromDb = await prisma.user.findUnique({
+            where: { id: decoded.id }, // <--- USA decoded.id
+            // Selecciona los campos que conformarán req.user
+            // Estos deben coincidir con lo que esperas en UserPayload y lo que es útil para req.user
+            select: { 
+                id: true, 
+                role: true, 
+                isActive: true, 
+                email: true, // Añadido para consistencia con UserPayload
+                name: true   // Añadido para consistencia con UserPayload
+            } 
         });
 
-        if (!user || !user.isActive) {
-            // Aunque el token sea válido, el usuario ya no existe o fue desactivado
+        if (!userFromDb || !userFromDb.isActive) {
             throw new UnauthorizedError('Usuario no encontrado o inactivo.');
         }
 
-        // Adjunta la información validada del usuario al objeto request
-        // Asegúrate que los campos coincidan con la interfaz UserPayload en express.d.ts
-        req.user = { id: user.id, role: user.role, email: user.email, name: user.name ?? undefined };
+        // Adjunta la información validada del usuario al objeto request.
+        // La estructura de req.user debe ser consistente con tu tipo UserPayload.
+        req.user = {
+            id: userFromDb.id,
+            role: userFromDb.role,
+            email: userFromDb.email, // Proviene de userFromDb.email
+            name: userFromDb.name,   // Proviene de userFromDb.name
+            // No necesitas añadir iat o exp aquí; esos son para la validación del token.
+        };
+        // --- FIN MODIFICACIONES PRINCIPALES ---
 
         next(); // Pasa al siguiente middleware/controlador
 
     } catch (error) {
         if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
-            // Token inválido, malformado o expirado
             return next(new UnauthorizedError('Token inválido o expirado. Por favor, inicie sesión de nuevo.'));
         }
-         // Pasa otros errores (como usuario no encontrado) al manejador global
-        next(error);
+        // Si es un AppError lanzado por nosotros (ej. config server o usuario no encontrado/inactivo)
+        if (error instanceof AppError) {
+            return next(error);
+        }
+        // Otros errores inesperados
+        next(new AppError('Error de autenticación inesperado.', 500, error)); // Envuelve errores desconocidos
     }
 };
