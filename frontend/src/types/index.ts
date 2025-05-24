@@ -1,10 +1,8 @@
 // Define roles basados en backend Role enum para consistencia en el frontend
 export type UserRole = 'ADMIN' | 'COORDINADOR' | 'USUARIO';
 
-// --- NUEVO: Definición y exportación de TipoMoneda ---
 export type TipoMoneda = 'CLP' | 'UF';
 export const DEFAULT_TIPO_MONEDA: TipoMoneda = 'CLP'; // Constante para el valor por defecto
-// --- FIN NUEVO ---
 
 // Interface para objetos User compartidos en el frontend
 export interface User {
@@ -64,3 +62,94 @@ export interface ProgramaOption extends LookupOption { /* ... */ lineaFinanciami
 export interface UserOption { /* ... */ id: number; name?: string | null; email: string; }
 export interface FormOptionsResponse { /* ... */ estados: LookupOption[]; unidades: UnidadMunicipalOption[]; tipologias: TipologiaOption[]; sectores: LookupOption[]; lineas: LookupOption[]; programas: ProgramaOption[]; etapas: LookupOption[]; usuarios: UserOption[]; }
 // --- Fin Tipos/Interfaces para Opciones de Lookup ---
+
+// --- ENUMS para Tareas (deben coincidir con los de Prisma) ---
+export enum EstadoTarea {
+  PENDIENTE = 'PENDIENTE',
+  EN_PROGRESO = 'EN_PROGRESO',
+  COMPLETADA = 'COMPLETADA',
+  EN_REVISION = 'EN_REVISION',
+  CANCELADA = 'CANCELADA',
+}
+
+export enum PrioridadTarea {
+  ALTA = 'ALTA',
+  MEDIA = 'MEDIA',
+  BAJA = 'BAJA',
+}
+
+// --- Interfaz para Mensajes de Chat ---
+export interface ChatMessage {
+  id: number;
+  contenido: string; // HTML
+  fechaEnvio: string | Date;
+  tareaId: number;
+  remitenteId: number;
+  remitente: { // Información seleccionada del remitente
+    id: number;
+    name?: string | null;
+    email: string;
+    role: UserRole; // Asumiendo que UserRole ya está definido
+  };
+}
+
+// --- Interfaz para Tareas ---
+// Esta interfaz debe reflejar lo que la API devuelve, incluyendo los 'includes'
+export interface Task {
+  id: number;
+  titulo: string;
+  descripcion?: string | null; // HTML
+  fechaCreacion: string | Date;
+  fechaActualizacion: string | Date;
+  fechaPlazo?: string | Date | null;
+  estado: EstadoTarea;
+  prioridad?: PrioridadTarea | null;
+  proyectoId: number;
+  creadorId: number;
+  asignadoId?: number | null;
+
+  // Relaciones incluidas (con campos seleccionados, sin contraseñas)
+  creador?: {
+    id: number;
+    name?: string | null;
+    email: string;
+    role: UserRole;
+  };
+  asignado?: {
+    id: number;
+    name?: string | null;
+    email: string;
+    role: UserRole;
+  } | null;
+  proyecto?: { // Información básica del proyecto
+    id: number;
+    nombre: string;
+    codigoUnico: string;
+  };
+  mensajes?: ChatMessage[]; // Array de mensajes, se cargará en getTaskById
+}
+
+// --- Tipos para los Inputs de Formularios de Tareas (Frontend) ---
+// Basados en los Zod schemas del backend, pero como tipos para el frontend
+
+export interface CreateTaskFrontendInput {
+  titulo: string;
+  descripcion?: string | null;
+  fechaPlazo?: string | null; // El date picker podría dar un string o Date, el servicio API lo manejará
+  estado?: EstadoTarea;
+  prioridad?: PrioridadTarea | null;
+  asignadoId?: number | null;
+}
+
+// UpdateTaskFrontendInput es usualmente un Partial del CreateTaskFrontendInput
+export type UpdateTaskFrontendInput = Partial<CreateTaskFrontendInput>;
+
+
+// Tipo para la respuesta paginada de mensajes (si lo necesitas así más adelante)
+export interface PaginatedChatMessages {
+    messages: ChatMessage[];
+    totalMessages: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}
