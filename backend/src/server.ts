@@ -142,6 +142,27 @@ io.on('connection', (socket: Socket) => {
         socket.join(connectedUser.id.toString());
         console.log(`[Socket.IO] Usuario ID: ${connectedUser.id} unido a la sala personal: ${connectedUser.id.toString()}`);
 
+        // --- Lógica para unirse/dejar salas de chat de tareas ---
+        socket.on('join_task_chat_room', (taskId: string | number) => {
+            if (taskId && connectedUser) { // Asegurarse que taskId y user existan
+                const roomName = `task_chat_${taskId.toString()}`;
+                socket.join(roomName);
+                console.log(`[Socket.IO] Usuario ID: ${connectedUser.id} (Socket: ${socket.id}) se unió a la sala: ${roomName}`);
+                // Podrías emitir un mensaje a la sala confirmando que alguien se unió, si quieres
+                // io.to(roomName).emit('user_joined_chat', { userId: connectedUser.id, userName: connectedUser.name });
+            }
+        });
+
+        socket.on('leave_task_chat_room', (taskId: string | number) => {
+            if (taskId && connectedUser) { // Asegurarse que taskId y user existan
+                const roomName = `task_chat_${taskId.toString()}`;
+                socket.leave(roomName);
+                console.log(`[Socket.IO] Usuario ID: ${connectedUser.id} (Socket: ${socket.id}) dejó la sala: ${roomName}`);
+                // Podrías emitir un mensaje a la sala confirmando que alguien se fue, si quieres
+                // io.to(roomName).emit('user_left_chat', { userId: connectedUser.id, userName: connectedUser.name });
+            }
+        });
+
         socket.on('disconnect', (reason) => {
             console.log(`[Socket.IO] Cliente desconectado: ${socket.id}, Usuario ID: ${connectedUser.id}. Razón: ${reason}`);
         });

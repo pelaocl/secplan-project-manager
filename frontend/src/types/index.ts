@@ -93,6 +93,37 @@ export interface ChatMessage {
   };
 }
 
+// --- ENUMS PARA NOTIFICACIONES (deben coincidir con los valores de Prisma) ---
+export enum TipoNotificacion {
+  NUEVA_TAREA_ASIGNADA = 'NUEVA_TAREA_ASIGNADA',
+  NUEVO_MENSAJE_TAREA = 'NUEVO_MENSAJE_TAREA',
+  TAREA_ACTUALIZADA_ESTADO = 'TAREA_ACTUALIZADA_ESTADO',
+  TAREA_ACTUALIZADA_INFO = 'TAREA_ACTUALIZADA_INFO',
+  TAREA_COMPLETADA = 'TAREA_COMPLETADA',
+  TAREA_VENCIMIENTO_PROXIMO = 'TAREA_VENCIMIENTO_PROXIMO',
+  // Añade otros tipos que hayas definido en tu schema.prisma si es necesario
+}
+
+export enum TipoRecursoNotificacion {
+  TAREA = 'TAREA',
+  MENSAJE_CHAT_TAREA = 'MENSAJE_CHAT_TAREA',
+  PROYECTO = 'PROYECTO',
+  // Añade otros tipos que hayas definido
+}
+
+// --- INTERFAZ PARA NOTIFICACIONES ---
+export interface Notificacion {
+  id: number;
+  mensaje: string;
+  leida: boolean;
+  fechaCreacion: string | Date; // La API podría devolver string, pero es bueno castear a Date si se usa
+  urlDestino?: string | null;
+  tipo: TipoNotificacion; // Usa el enum definido arriba
+  usuarioId: number; // El ID del usuario al que pertenece esta notificación (no el objeto User completo)
+  recursoId?: number | null;
+  recursoTipo?: TipoRecursoNotificacion | null; // Usa el enum definido arriba
+}
+
 // --- Interfaz para Tareas ---
 // Esta interfaz debe reflejar lo que la API devuelve, incluyendo los 'includes'
 export interface Task {

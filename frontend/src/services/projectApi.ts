@@ -67,18 +67,38 @@ async function fetchProjects(params?: URLSearchParams | Record<string, any>): Pr
     }
 }
 
-
 // GET /projects/:id (Obtener uno) - Sin cambios
 async function getProjectById(id: number | string): Promise<Project> {
     console.log(`[projectApi] Fetching project with ID: ${id}`);
     try {
-        const response = await apiService.get<ApiSuccessDataWrapper<{ project: Project }>>(`/projects/${id}`);
-        if (response?.data?.project) { return response.data.project; }
-        else { throw new Error(`Respuesta inválida al obtener proyecto ${id}.`); }
+        // Si tu apiService.get devuelve un objeto wrapper:
+        const response = await apiService.get<{ data: { project: Project } }>(`/projects/${id}`); // Ajusta el tipo genérico si es necesario
+        if (response?.data?.project) { 
+            return response.data.project; 
+        }
+        // Si tu apiService.get devuelve el Project directamente (como asumimos antes):
+        // const project = await apiService.get<Project>(`/projects/${id}`);
+        // if (project) { return project; }
+        
+        // Si llegas aquí, la estructura de la respuesta no fue la esperada
+        throw new Error(`Respuesta inválida o proyecto no encontrado en la respuesta para ID ${id}.`);
+
     } catch (error) {
-         console.error(`[projectApi] Error fetching project ${id}:`, error);
-         if (error instanceof ApiError && error.status === 404) { throw new Error(`Proyecto con ID ${id} no encontrado.`); }
-         throw error;
+        const errorMessage = error instanceof Error ? error.message : "Error desconocido obteniendo proyecto.";
+        // --- MODIFICACIÓN DEL CONSOLE.ERROR ---
+        console.error(`[projectApi] Error fetching project ID ${id} (mensaje):`, errorMessage);
+        if (error instanceof ApiError && error.data) {
+            console.error(`[projectApi] ApiError data for project ${id}:`, JSON.stringify(error.data, null, 2));
+        }
+        // --- FIN MODIFICACIÓN ---
+
+        // Tu lógica de re-lanzar el error puede permanecer o ajustarse:
+        if (error instanceof ApiError && error.status === 404) { 
+            // Si quieres que el componente maneje "No encontrado" específicamente
+            throw new NotFoundError(`Proyecto con ID ${id} no encontrado.`); // Asumiendo que tienes una clase NotFoundError
+        }
+        // Re-lanza el error original o uno nuevo para que el componente lo maneje
+        throw error instanceof Error ? error : new Error(errorMessage);
     }
 }
 
@@ -115,7 +135,6 @@ async function updateProject(id: number | string, projectData: Partial<ProjectFo
 }
 
 // DELETE /projects/:id (Eliminar)
-// =============== NUEVA FUNCION ===============
 async function deleteProject(id: number | string): Promise<void> {
    console.log(`[projectApi] Deleting project ${id}...`);
    try {
@@ -135,7 +154,6 @@ async function deleteProject(id: number | string): Promise<void> {
        throw error; // Relanza otros errores (ej. de red)
    }
 }
-// =============== FIN NUEVA FUNCION ===============
 
 
 // Exporta todas las funciones como un objeto
@@ -146,7 +164,3 @@ export const projectApi = {
     updateProject,
     deleteProject, // <-- Añadida la nueva función
 };
-
-// ========================================================================
-// FIN: Contenido COMPLETO y MODIFICADO para projectApi.ts (AÑADE DELETE)
-// ========================================================================

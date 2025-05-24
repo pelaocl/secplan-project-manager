@@ -46,7 +46,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { taskFormSchema, TaskFormValues } from '../schemas/taskFormSchema';
 import TaskForm from '../components/TaskForm'; // Tu componente de formulario de tareas
 import { Snackbar } from '@mui/material'; // Para mensajes de éxito/error
-
+import TaskDetailModal from '../components/TaskDetailModal';
 
 // --- Helper Functions ---
 const formatCurrency = (value: string | number | null | undefined | { toNumber: () => number }, currency: TipoMoneda = 'CLP'): string => { let numericValue: number | null = null; if (value == null) numericValue = null; else if (typeof value === 'object' && value && typeof value.toNumber === 'function') numericValue = value.toNumber(); else { const num = Number(String(value).replace(',', '.')); if (!isNaN(num)) numericValue = num; } if (numericValue === null) return 'N/A'; try { return new Intl.NumberFormat('es-CL', { style: 'currency', currency: currency === 'UF' ? 'CLF' : 'CLP', minimumFractionDigits: currency === 'UF' ? 2 : 0, maximumFractionDigits: currency === 'UF' ? 4 : 0, }).format(numericValue); } catch (e) { console.error("Error formatting currency:", e); return `${currency === 'UF' ? 'UF' : '$'} ${numericValue.toLocaleString('es-CL')}`; } };
@@ -98,6 +98,13 @@ function ProjectDetailPage() {
     });
     // --- FIN useForm ---
 
+    // --- NUEVOS ESTADOS PARA EL MODAL DE DETALLE DE TAREA ---
+    const [selectedTaskForDetail, setSelectedTaskForDetail] = useState<Task | null>(null);
+    const [isTaskDetailModalOpen, setIsTaskDetailModalOpen] = useState(false);
+    const [loadingTaskDetail, setLoadingTaskDetail] = useState<boolean>(false);
+    const [taskDetailError, setTaskDetailError] = useState<string | null>(null);
+    // --- FIN NUEVOS ESTADOS ---
+
     const loadPageData = useCallback(async () => {
         if (isNaN(projectIdNum)) {
             setError("ID de proyecto inválido.");
@@ -117,24 +124,41 @@ function ProjectDetailPage() {
             const [fetchedProject, fetchedTasks, fetchedLookups] = await Promise.all([
                 projectApi.getProjectById(projectIdNum),
                 taskApi.getTasksByProjectId(projectIdNum),
-                lookupApi.getFormOptions() // <-- LLAMADA A API PARA LOOKUPOPTIONS
+                lookupApi.getFormOptions()
             ]);
             
             setProject(fetchedProject);
             setTasks(fetchedTasks);
-            setLookupOptions(fetchedLookups); // <-- GUARDA LOOKUPOPTIONS
+            setLookupOptions(fetchedLookups);
     
         } catch (err) { 
-            console.error("Error cargando datos de la página del proyecto:", err);
-            const errorMsg = err instanceof Error ? err.message : "Ocurrió un error al cargar los datos.";
-            // Si alguna de las promesas en Promise.all falla, este catch se activa.
-            // Puedes diferenciar el error si es necesario, pero por ahora un error general es suficiente.
-            setError(errorMsg); 
-            setTasksError(errorMsg); // Asumimos que si algo falla, las tareas y lookups también fallaron en cargarse para el contexto
+            // --- MODIFICACIÓN AQUÍ ---
+            const errorMessage = err instanceof Error ? err.message : "Ocurrió un error desconocido al cargar datos para la página del proyecto.";
+            console.error("[ProjectDetailPage] Error en loadPageData (mensaje):", errorMessage);
+
+            // Opcional: Loguear más detalles del error de forma segura si es una ApiError
+            if (err instanceof ApiError && err.data) {
+                console.error("[ProjectDetailPage] ApiError data:", JSON.stringify(err.data, null, 2));
+            } else if (err instanceof Error && !(err instanceof ApiError)) {
+                // Para errores estándar, el stack puede ser útil, pero pruébalo con cuidado
+                // console.error("[ProjectDetailPage] Error stack:", err.stack);
+            }
+            // --- FIN MODIFICACIÓN ---
+
+            // Lógica para establecer los estados de error
+            if (err instanceof ApiError && err.status === 404) {
+                 // Podríamos verificar si el error 404 fue específicamente para el proyecto
+                 // o para las tareas/lookups. Por ahora, un mensaje general está bien.
+                 setError(`No se pudieron cargar todos los datos para el proyecto ID ${projectIdNum}. Uno de los recursos podría no existir.`);
+            } else {
+                setError(errorMessage);
+            }
+            setTasksError(errorMessage); // También puedes establecer un error específico para tareas si lo deseas
+            // Podrías tener un setLookupOptionsError(errorMessage) si tienes ese estado
         } finally {
             setLoading(false);
             setLoadingTasks(false);
-            setLoadingLookups(false); // <--- Termina todas las cargas
+            setLoadingLookups(false);
         }
     }, [projectIdNum]);
 
@@ -196,11 +220,26 @@ function ProjectDetailPage() {
     };
     // --- FIN HANDLERS MODAL ---
 
-    const handleViewTaskDetails = (taskId: number) => {
-        console.log(`TODO: Navegar o abrir modal para ver detalles de tarea ID: ${taskId} del proyecto ID: ${project?.id}`);
-        alert(`Ver detalles/chat de tarea ${taskId} - Funcionalidad pendiente.`);
-        // Ejemplo de navegación (si tienes una ruta para ello):
-        // navigate(`/projects/${project?.id}/tasks/${taskId}/view`); 
+    const handleViewTaskDetails = async (taskId: number) => {
+        if (!project) return; // Asegurarse que project exista para tener projectIdNum
+
+        console.log(`Cargando detalles para tarea ID: ${taskId} del proyecto ID: ${project.id}`);
+        setLoadingTaskDetail(true);
+        setTaskDetailError(null);
+        try {
+            // projectIdNum ya está definido en el scope de ProjectDetailPage
+            const detailedTask = await taskApi.getTaskById(projectIdNum, taskId);
+            setSelectedTaskForDetail(detailedTask);
+            setIsTaskDetailModalOpen(true);
+        } catch (err) {
+            console.error("Error cargando detalles de la tarea:", err);
+            const errorMsg = err instanceof Error ? err.message : "Error al cargar los detalles de la tarea.";
+            setTaskDetailError(errorMsg); 
+            // Podrías mostrar este error en un Snackbar o un Alert pequeño
+            setSnackbarMessage(errorMsg); // Reutilizando el snackbarMessage existente
+        } finally {
+            setLoadingTaskDetail(false);
+        }
     };
 
     if (loading || loadingTasks || loadingLookups && !project) { 
@@ -348,13 +387,31 @@ function ProjectDetailPage() {
             )}
             {/* --- FIN MODAL --- */}
 
+            {/* --- MODAL PARA DETALLE DE TAREA --- */}
+            {selectedTaskForDetail && ( // Renderiza solo si hay una tarea seleccionada
+                <TaskDetailModal
+                    task={selectedTaskForDetail}
+                    open={isTaskDetailModalOpen}
+                    onClose={() => {
+                        setIsTaskDetailModalOpen(false);
+                        setSelectedTaskForDetail(null); // Limpia la tarea seleccionada al cerrar
+                    }}
+                    // No necesitamos pasar projectUsers si task.creador y task.asignado ya tienen name/email
+                />
+            )}
+            {/* --- FIN MODAL --- */}
+
+            {/* Snackbar para mensajes de éxito (ya lo tenías para nueva tarea) */}
             <Snackbar
                 open={!!snackbarMessage}
                 autoHideDuration={4000}
                 onClose={() => setSnackbarMessage(null)}
-                message={snackbarMessage}
-            />
-
+                // message={snackbarMessage} // Si usas Alert dentro, no necesitas message prop
+            >
+                <Alert onClose={() => setSnackbarMessage(null)} severity={taskDetailError ? "error" : "success"} variant="filled" sx={{ width: '100%' }}>
+                    {snackbarMessage || taskDetailError}
+                </Alert>
+            </Snackbar>
         </Container>
     );
 }

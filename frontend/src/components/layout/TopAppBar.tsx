@@ -1,24 +1,37 @@
-// ========================================================================
-// INICIO: Contenido COMPLETO y CORREGIDO para TopAppBar.tsx (v3 - Posición Menú)
-// ========================================================================
+// frontend/src/components/layout/TopAppBar.tsx
 import React, { useState } from 'react';
 import {
-    AppBar, Toolbar, Typography, Button, Box, Stack, Avatar, Chip, Tooltip, IconButton, Menu, MenuItem, useTheme
+    AppBar, Toolbar, Typography, Button, Box, Stack, Avatar, /* Chip, */ Tooltip, IconButton, Menu, MenuItem, useTheme // Chip no se usaba aquí
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // O el icono que prefieras
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'; // Para el item de menú
+// import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // No se usaba, PersonIcon se usa en Avatar
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import PersonIcon from '@mui/icons-material/Person'; // Para el Avatar fallback
+
 // Importa los hooks/selectores necesarios de tu store Zustand
 import { useIsAuthenticated, useCurrentUser, useAuthActions, useCurrentUserRole } from '../../store/authStore';
-import { UserRole } from '../../types';
+// import { UserRole } from '../../types'; // UserRole no se usa directamente aquí si useCurrentUserRole lo devuelve bien
+
+// --- AÑADIR IMPORT PARA NOTIFICATIONBELL ---
+import NotificationBell from './NotificationBell'; 
+// -----------------------------------------
+
 
 // Helper para obtener iniciales del nombre (simple)
 const getInitials = (name?: string | null): string => {
     if (!name) return '?';
     const names = name.trim().split(' ');
+    if (names.length === 0 || names[0] === '') return '?'; // Manejar string vacío o solo espacios
+    
     if (names.length > 1 && names[0] && names[names.length - 1]) {
-        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+        const firstInitial = names[0][0];
+        const lastInitial = names[names.length - 1][0];
+        if (firstInitial && lastInitial) { // Asegurarse de que las iniciales no sean undefined
+             return `${firstInitial}${lastInitial}`.toUpperCase();
+        } else if (firstInitial) {
+            return firstInitial.toUpperCase();
+        }
     } else if (names.length === 1 && names[0].length > 0) {
         return names[0][0].toUpperCase();
     }
@@ -26,14 +39,13 @@ const getInitials = (name?: string | null): string => {
 };
 
 function TopAppBar() {
-    const theme = useTheme(); // Accede al tema si necesitas colores específicos
+    const theme = useTheme();
     const isAuthenticated = useIsAuthenticated();
     const currentUser = useCurrentUser();
     const { logout } = useAuthActions();
     const navigate = useNavigate();
     const userRole = useCurrentUserRole();
 
-    // Estado para el Menú de Usuario
     const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
 
     const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -45,96 +57,83 @@ function TopAppBar() {
     };
 
     const handleLogout = () => {
-        handleCloseUserMenu(); // Cierra el menú primero
+        handleCloseUserMenu();
         logout();
         navigate('/login');
     };
 
-    // Navega al panel de admin (que redirige a la primera pestaña)
     const goToAdminPanel = () => {
-        navigate('/admin'); // Navega a la ruta padre del layout admin
+        navigate('/admin');
         handleCloseUserMenu();
     };
 
-
     return (
-        <AppBar position="static" elevation={1}>
+        <AppBar position="static" elevation={1} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}> {/* Asegurar que esté sobre el drawer si tienes uno */}
             <Toolbar>
-                {/* Título/Logo */}
                 <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                     <RouterLink to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
                         SECPLAN Gestor Proyectos
                     </RouterLink>
                 </Typography>
 
-                {/* Info Usuario y Logout / Botón Login */}
                 {isAuthenticated && currentUser ? (
-                    // Vista Usuario Autenticado
-                    <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Stack direction="row" spacing={1} alignItems="center"> {/* Reducido spacing a 1 para acomodar campana */}
+                        
+                        {/* --- CAMPANA DE NOTIFICACIONES AÑADIDA AQUÍ --- */}
+                        <NotificationBell />
+                        {/* ---------------------------------------------- */}
 
-                        {/* TODO: Placeholder para futuros Badges de Rol/Etiqueta */}
-                        {/* <Stack direction="row" spacing={0.5}>...</Stack> */}
-
-                        {/* Nombre Usuario */}
                         <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontWeight: 500 }}>
                             {currentUser.name || currentUser.email}
                         </Typography>
 
-                        {/* Icono Usuario Clickable */}
-                        <Tooltip title="Opciones">
+                        <Tooltip title="Opciones de Usuario">
                             <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
                                 <Avatar
                                     sx={{
                                         width: 32,
                                         height: 32,
                                         fontSize: '0.875rem',
-                                        bgcolor: 'secondary.light', // Puedes usar un color del tema
-                                        color: 'secondary.contrastText'
+                                        // Usar primary o un color que contraste bien con el AppBar
+                                        bgcolor: theme.palette.primary.dark, // O 'secondary.main' etc.
+                                        color: theme.palette.primary.contrastText 
                                     }}
                                 >
-                                    {getInitials(currentUser.name)}
+                                    {getInitials(currentUser.name) || <PersonIcon />}
                                 </Avatar>
                             </IconButton>
                         </Tooltip>
-
-                        {/* Menú de Usuario (Posición Corregida) */}
                         <Menu
-                            // Quitamos sx={{ mt: '45px' }}
                             id="menu-appbar"
                             anchorEl={anchorElUser}
-                            // Origen del ancla: Debajo y a la derecha del botón
                             anchorOrigin={{
-                                vertical: 'bottom', // <-- Debajo del icono
+                                vertical: 'bottom',
                                 horizontal: 'right',
                             }}
                             keepMounted
-                            // Origen de la transformación: Esquina superior derecha del menú
                             transformOrigin={{
                                 vertical: 'top',
                                 horizontal: 'right',
                             }}
                             open={Boolean(anchorElUser)}
                             onClose={handleCloseUserMenu}
+                            MenuListProps={{ sx: { py: 0.5 } }} // Añade un poco de padding al MenuList
                         >
-                            {/* Item Panel Admin (Condicional) */}
                             {(userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
-                                <MenuItem onClick={goToAdminPanel}> {/* Llama a la función de navegación */}
-                                    <AdminPanelSettingsIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
-                                    <Typography textAlign="center">Panel Admin</Typography>
+                                <MenuItem onClick={goToAdminPanel} sx={{fontSize: '0.9rem', py:1}}>
+                                    <AdminPanelSettingsIcon sx={{ mr: 1.5, fontSize: '1.2rem', color: 'action.active' }} />
+                                    Panel Admin
                                 </MenuItem>
                             )}
-                            {/* Puedes añadir más items aquí (ej. Mi Perfil) */}
-
-                            {/* Item Logout */}
-                            <MenuItem onClick={handleLogout}>
-                                <LogoutIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
-                                <Typography textAlign="center">Cerrar Sesión</Typography>
+                            {/* Puedes añadir un Divider aquí si hay más items */}
+                            {/* { (userRole === 'ADMIN' || userRole === 'COORDINADOR') && <Divider sx={{my:0.5}} /> } */}
+                            <MenuItem onClick={handleLogout} sx={{fontSize: '0.9rem', py:1}}>
+                                <LogoutIcon sx={{ mr: 1.5, fontSize: '1.2rem', color: 'action.active' }} />
+                                Cerrar Sesión
                             </MenuItem>
                         </Menu>
-
                     </Stack>
                 ) : (
-                    // Vista Usuario No Autenticado
                     <Button color="inherit" component={RouterLink} to="/login">
                         Login
                     </Button>
@@ -145,6 +144,3 @@ function TopAppBar() {
 }
 
 export default TopAppBar;
-// ========================================================================
-// FIN: Contenido COMPLETO y CORREGIDO para TopAppBar.tsx (v3 - Posición Menú)
-// ========================================================================

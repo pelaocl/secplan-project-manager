@@ -12,11 +12,18 @@ const TASK_API_BASE = '/projects'; // Las rutas de tareas están anidadas bajo /
 // Obtener todas las tareas de un proyecto específico
 async function getTasksByProjectId(projectId: number): Promise<Task[]> {
     try {
-        // El backend actualmente devuelve Task[] directamente para esta ruta
-        const tasks = await apiService.get<Task[]>(`${TASK_API_BASE}/${projectId}/tasks`);
+        const endpoint = `/projects/${projectId}/tasks`; // Asegúrate que la ruta sea correcta
+        // console.log(`[taskApi] Fetching tasks from: ${endpoint}`); // Log de URL opcional
+        const tasks = await apiService.get<Task[]>(endpoint);
         return tasks;
     } catch (error) {
-        console.error(`[taskApi] Error fetching tasks for project ${projectId}:`, error);
+        const errorMessage = error instanceof Error ? error.message : "Error desconocido obteniendo tareas.";
+        // --- MODIFICACIÓN DEL CONSOLE.ERROR ---
+        console.error(`[taskApi] Error fetching tasks for project ${projectId} (mensaje):`, errorMessage);
+        if (error instanceof ApiError && error.data) {
+            console.error(`[taskApi] ApiError data for tasks (project ${projectId}):`, JSON.stringify(error.data, null, 2));
+        }
+        // --- FIN MODIFICACIÓN ---
         throw error; // Re-lanza para que el componente que llama pueda manejarlo
     }
 }
