@@ -1,97 +1,85 @@
 // frontend/src/components/layout/NotificationBell.tsx
-import React, { useState, useEffect, useRef } from 'react';
-import { IconButton, Badge, Menu, MenuItem, Typography, Box, CircularProgress, Divider, Button, List } from '@mui/material';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { IconButton, Badge, Menu, Typography, Box, CircularProgress, Divider, Button, List } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-import { notificationApi, NotificationsResponse } from '../../services/notificationApi';
+import { notificationApi } from '../../services/notificationApi';
 import { Notificacion } from '../../types';
-import NotificationItem from '../NotificationItem'; // El componente que acabamos de crear
-import { useAuthStore } from '../../store/authStore'; // Para manejar re-fetch al loguear/desloguear
-import { socketService } from '../../services/socketService'; // Para escuchar eventos
+import NotificationItem from '../NotificationItem';
+import { useAuthStore } from '../../store/authStore';
+import { socketService } from '../../services/socketService';
 
 const NotificationBell: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifications, setNotifications] = useState<Notificacion[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated); // Para re-fetch
-  const lastFetchedUserId = useRef<number | null | undefined>(null);
+  const [isLoadingDropdown, setIsLoadingDropdown] = useState<boolean>(false);
+  
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const currentUserId = useAuthStore((state) => state.user?.id);
 
-
-  const fetchNotifications = async () => {
+  const fetchDropdownNotifications = useCallback(async () => {
     if (!isAuthenticated || !currentUserId) {
       setNotifications([]);
-      setUnreadCount(0);
+      // El unreadCount se actualiza por socket, pero al desloguear o si no hay user, lo reseteamos
+      if(!currentUserId) setUnreadCount(0); 
       return;
     }
-    setIsLoading(true);
+    setIsLoadingDropdown(true);
     try {
-      // Fetch inicial, podrías querer solo las no leídas o una mezcla para el dropdown
+      // Al abrir el dropdown, traemos una lista (puede ser solo no leídas o una mezcla)
+      // y el contador actualizado por si acaso.
       const response = await notificationApi.getNotifications(false); // Trae todas (leídas y no leídas)
       setNotifications(response.notifications.slice(0, 10)); // Mostrar solo las últimas N en el dropdown
-      setUnreadCount(response.unreadCount);
-      lastFetchedUserId.current = currentUserId;
+      setUnreadCount(response.unreadCount); 
     } catch (error) {
-      console.error("Error fetching notifications:", error);
-      // Podrías mostrar un error en el dropdown
+      console.error("Error fetching dropdown notifications:", error);
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated && currentUserId && currentUserId !== lastFetchedUserId.current) {
-        fetchNotifications();
-    } else if (!isAuthenticated) {
-        setNotifications([]);
-        setUnreadCount(0);
-        lastFetchedUserId.current = null;
+      setIsLoadingDropdown(false);
     }
   }, [isAuthenticated, currentUserId]);
 
-  // --- Escuchar eventos de Socket.IO para actualizar notificaciones ---
+  // Cargar contador inicial al montar o cambiar usuario/estado de autenticación
   useEffect(() => {
-    if (!isAuthenticated || !socketService.getSocket()) return;
+    if (isAuthenticated && currentUserId) {
+        // Llama a la función que obtiene las notificaciones para el dropdown,
+        // la cual también actualiza el unreadCount.
+        fetchDropdownNotifications();
+    } else {
+        // Limpiar si el usuario se desloguea
+        setNotifications([]);
+        setUnreadCount(0);
+    }
+  }, [isAuthenticated, currentUserId, fetchDropdownNotifications]);
 
-    // Estos eventos son ejemplos. Tu backend emite 'nueva_tarea_asignada', 'tarea_actualizada', 'nuevo_mensaje_chat'.
-    // Idealmente, el backend también emitiría un evento más genérico como 'nueva_notificacion_personal'
-    // cuando se crea una Notificacion en la DB para el usuario actual.
-    // O, el frontend puede re-fetchear al recibir CUALQUIER evento relevante de tarea/chat.
 
-    const handleGenericNotificationEvent = (eventData: any) => {
-        console.log('[NotificationBell] Socket event received, refetching notifications:', eventData);
-        fetchNotifications(); // Re-fetch para actualizar contador y lista
+  // Escuchar evento de Socket.IO para actualizar EL CONTADOR
+  useEffect(() => {
+    if (!isAuthenticated || !socketService.getSocket() || !currentUserId) return;
+
+    const handleUnreadCountUpdate = (data: { count: number }) => {
+        console.log('[NotificationBell] Evento unread_count_updated recibido:', data);
+        setUnreadCount(data.count);
+        // Si el menú está abierto cuando llega una actualización de contador,
+        // podrías querer refrescar la lista visible en el dropdown.
+        if (anchorEl) {
+            fetchDropdownNotifications();
+        }
     };
     
-    // Nos suscribimos a los eventos que ya emite el backend
-    socketService.on('nueva_tarea_asignada', handleGenericNotificationEvent);
-    socketService.on('tarea_actualizada', handleGenericNotificationEvent);
-    socketService.on('tarea_eliminada', handleGenericNotificationEvent);
-    socketService.on('nuevo_mensaje_chat', handleGenericNotificationEvent); // Este es a una sala, hay que ser cuidadoso
-
-    // El evento 'nuevo_mensaje_chat' se emite a una sala de tarea.
-    // Para que este bell se actualice, el usuario tendría que estar en esa sala O
-    // el backend debería enviar una señal individual al usuario afectado por el mensaje.
-    // Por ahora, asumimos que un 'nuevo_mensaje_chat' podría ser relevante si el usuario participa.
-    // Una mejor solución es un evento socket directo al usuario: `nueva_notificacion_para_ti`.
+    socketService.on('unread_count_updated', handleUnreadCountUpdate);
 
     return () => {
         const socket = socketService.getSocket();
         if (socket) {
-            socket.off('nueva_tarea_asignada', handleGenericNotificationEvent);
-            socket.off('tarea_actualizada', handleGenericNotificationEvent);
-            socket.off('tarea_eliminada', handleGenericNotificationEvent);
-            socket.off('nuevo_mensaje_chat', handleGenericNotificationEvent);
+            socket.off('unread_count_updated', handleUnreadCountUpdate);
         }
     };
-  }, [isAuthenticated]); // Re-suscribirse si cambia el estado de autenticación
+  }, [isAuthenticated, currentUserId, anchorEl, fetchDropdownNotifications]);
 
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
-    if (unreadCount > 0 || notifications.length === 0) { // Re-fetch si hay no leídas o si está vacío para asegurar datos frescos
-        fetchNotifications();
-    }
+    fetchDropdownNotifications(); // Refresca la lista del dropdown al abrirlo
   };
 
   const handleClose = () => {
@@ -101,7 +89,9 @@ const NotificationBell: React.FC = () => {
   const handleMarkAsRead = async (notificationId: number) => {
     try {
       await notificationApi.markAsRead(notificationId);
-      fetchNotifications(); // Re-fetch para actualizar la lista y el contador
+      // El backend debería emitir 'unread_count_updated' si esto cambia el contador.
+      // Adicionalmente, refrescamos la lista del dropdown para reflejar el cambio de 'leida' visualmente.
+      fetchDropdownNotifications(); 
     } catch (error) {
       console.error("Error marking notification as read:", error);
     }
@@ -110,8 +100,7 @@ const NotificationBell: React.FC = () => {
   const handleMarkAllAsRead = async () => {
     try {
         await notificationApi.markAllAsRead();
-        fetchNotifications();
-        // handleClose(); // Opcional: cerrar el menú después de marcar todas
+        fetchDropdownNotifications(); // Refresca todo
     } catch (error) {
         console.error("Error marking all as read:", error);
     }
@@ -122,11 +111,10 @@ const NotificationBell: React.FC = () => {
       <IconButton
         size="large"
         color="inherit"
-        aria-label="show new notifications"
         aria-controls="notifications-menu"
         aria-haspopup="true"
         onClick={handleClick}
-        disabled={!isAuthenticated} // Deshabilitar si no está autenticado
+        disabled={!isAuthenticated}
       >
         <Badge badgeContent={unreadCount} color="error">
           <NotificationsIcon />
@@ -138,45 +126,34 @@ const NotificationBell: React.FC = () => {
         open={Boolean(anchorEl)}
         onClose={handleClose}
         MenuListProps={{ 'aria-labelledby': 'notifications-button' }}
-        PaperProps={{
-          style: {
-            maxHeight: 400,
-            width: '350px',
-            overflowY: 'auto'
-          },
-        }}
+        PaperProps={{ style: { maxHeight: 400, width: '350px', overflowY: 'auto' } }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', p:1.5, pt:1 }}>
             <Typography variant="subtitle1" sx={{fontWeight: 'bold'}}>Notificaciones</Typography>
             {notifications.length > 0 && unreadCount > 0 && (
-                <Button size="small" onClick={handleMarkAllAsRead} disabled={isLoading}>
+                <Button size="small" onClick={handleMarkAllAsRead} disabled={isLoadingDropdown}>
                     Marcar todas como leídas
                 </Button>
             )}
         </Box>
         <Divider sx={{mb: 0.5}} />
-        {isLoading && <Box sx={{display: 'flex', justifyContent: 'center', p:2}}><CircularProgress size={24} /></Box>}
-        {!isLoading && notifications.length === 0 && (
+        {isLoadingDropdown && <Box sx={{display: 'flex', justifyContent: 'center', p:2}}><CircularProgress size={24} /></Box>}
+        {!isLoadingDropdown && notifications.length === 0 && (
           <Typography sx={{ p: 2, textAlign: 'center' }} color="text.secondary">No tienes notificaciones.</Typography>
         )}
-        {!isLoading && notifications.length > 0 && (
-            <List disablePadding sx={{outline: 'none'}}> {/* Para quitar el foco del menú al hacer clic en item */}
+        {!isLoadingDropdown && notifications.length > 0 && (
+            <List disablePadding sx={{outline: 'none'}}>
              {notifications.map((notif) => (
                 <NotificationItem 
                     key={notif.id} 
                     notification={notif} 
-                    onMarkAsRead={() => {
-                        handleMarkAsRead(notif.id);
-                        // No cerramos el menú aquí para que pueda marcar varias si quiere
-                        // handleClose(); 
-                    }}
+                    onMarkAsRead={handleMarkAsRead}
                 />
              ))}
             </List>
         )}
-        {/* Podrías añadir un link "Ver todas las notificaciones" si tienes una página dedicada */}
       </Menu>
     </>
   );

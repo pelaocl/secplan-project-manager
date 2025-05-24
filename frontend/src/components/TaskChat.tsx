@@ -106,8 +106,8 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
   const handleSendMessage = async () => {
     if (!newMessageContent.trim() || !currentUser) return;
     const cleanHtml = DOMPurify.sanitize(newMessageContent, { 
-        ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'br'],
-        ALLOWED_ATTR: ['href', 'target']
+        ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'br', 'img'],
+        ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
     });
     if (!cleanHtml.trim() && !editorRef.current?.getEditor().getText().trim()) { // Doble check por si solo eran tags vacíos
         setError("El mensaje no puede estar vacío después de la sanitización.");
@@ -164,9 +164,17 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
                 style={{ backgroundColor: 'white' }} // Para que se vea bien sobre fondo gris
             />
          </Box>
-        <IconButton color="primary" onClick={handleSendMessage} disabled={isSending || !newMessageContent.trim()} aria-label="Enviar mensaje">
-          {isSending ? <CircularProgress size={24} /> : <SendIcon />}
-        </IconButton>
+         <Button
+              variant="contained"
+              color="primary"
+              size="medium" // O 'small' si prefieres
+              onClick={handleSendMessage}
+              disabled={isSending || !newMessageContent.trim()}
+              endIcon={isSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+              sx={{ ml: 1, borderRadius: '8px' /* Ajusta el redondeo */ }}
+          >
+              Enviar
+          </Button>
       </Box>
       {error && <Alert severity="error" sx={{mt:1}}>{error}</Alert>}
     </Box>

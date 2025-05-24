@@ -4,6 +4,7 @@ import { Notificacion, TipoNotificacion, TipoRecursoNotificacion } from '@prisma
 // Asumimos que tendrás un CreateNotificationInput, ya sea inferido de Zod o definido manualmente
 // Si usas Zod, importa el tipo:
 import { CreateNotificationInput } from '../schemas/notificationSchemas';
+import { emitToUser } from '../socketManager';
 
 export const createDBNotification = async (
     data: CreateNotificationInput
@@ -22,6 +23,21 @@ export const createDBNotification = async (
             },
         });
         console.log(`[NotificationService] Notificación creada en DB para usuario ${data.usuarioId}, tipo ${data.tipo}`);
+        
+        // --- NUEVO: Obtener y emitir el nuevo conteo de no leídas ---
+        if (notification) {
+            const unreadCount = await prisma.notificacion.count({
+                where: {
+                    usuarioId: data.usuarioId,
+                    leida: false,
+                },
+            });
+            // Emitir el evento al usuario específico
+            emitToUser(data.usuarioId.toString(), 'unread_count_updated', { count: unreadCount });
+            console.log(`[NotificationService] Emitido 'unread_count_updated' para usuario ${data.usuarioId} con count: ${unreadCount}`);
+        }
+        // --- FIN NUEVO ---
+        
         return notification;
     } catch (error) {
         console.error("[NotificationService] Error creando notificación en DB:", error);

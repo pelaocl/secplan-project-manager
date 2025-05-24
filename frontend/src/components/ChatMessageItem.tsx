@@ -3,6 +3,7 @@ import React from 'react';
 import { Box, Paper, Typography, Avatar, Tooltip, useTheme } from '@mui/material';
 import { ChatMessage, User } from '../types'; // Asume que User tiene id, name, email
 import { useCurrentUser } from '../store/authStore'; // Para saber quién es el usuario actual
+import { getUserAvatarColor } from '../utils/colorUtils';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -35,7 +36,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
                 height: 32, 
                 mr: 1, 
                 mb: 0.5, // Alinea con la base del Paper
-                bgcolor: theme.palette.secondary.main // O un color basado en el ID del usuario
+                bgcolor: getUserAvatarColor(message.remitente.id)
               }}
             >
               {getInitials(message.remitente.name)}
@@ -62,12 +63,14 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
           <Box
             className="quill-chat-content" // Para estilos específicos si es necesario
             sx={{ 
-                lineHeight: 1.5, 
-                '& p': { my: 0 }, // Ajustar márgenes de Quill para chat
-                // Puedes añadir más estilos para h1, ul, etc. si los permites en el chat
-                '& a': { color: isSenderCurrentUser ? theme.palette.common.white : theme.palette.primary.main },
-                '& img': { maxWidth: '100%', height: 'auto', my: 0.5, borderRadius: 1 },
-             }}
+              lineHeight: 1.5, 
+              '& p': { my: 0, lineHeight: 'inherit' }, // Asegura que el p herede el line-height del Box
+              '& strong': { fontWeight: 'bold' },
+              '& em': { fontStyle: 'italic' },
+              '& ul, & ol': { pl: 2.5, my: 0.5, lineHeight: 'inherit' },
+              '& a': { color: isSenderCurrentUser ? theme.palette.common.white : theme.palette.primary.main },
+              '& img': { maxWidth: '100%', height: 'auto', my: 0.5, borderRadius: 1 },
+          }}
             dangerouslySetInnerHTML={{ __html: message.contenido }}
           />
           <Typography
@@ -92,7 +95,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
                     height: 32, 
                     ml: 1, 
                     mb: 0.5, 
-                    bgcolor: theme.palette.primary.light // O un color basado en el ID del usuario
+                    bgcolor: getUserAvatarColor(currentUser.id)
                 }}
             >
                 {getInitials(currentUser.name)}
