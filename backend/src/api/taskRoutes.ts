@@ -4,6 +4,8 @@ import { authenticateToken } from '../middlewares/authMiddleware';
 import { validateRequest } from '../middlewares/validationMiddleware';
 import { createTaskSchema, projectIdSchema, taskIdSchema, updateTaskSchema } from '../schemas/taskSchemas';
 import * as taskController from '../controllers/taskController';
+import chatMessageRoutes from './chatMessageRoutes'; // <-- IMPORTAR
+
 // Importa un middleware de autorización de roles si lo tienes (ej. authorizeRole)
 // import { authorizeRole } from '../middlewares/roleMiddleware';
 // import { Role } from '@prisma/client'; // Si usas authorizeRole
@@ -58,5 +60,10 @@ router.delete(
     validateRequest({ params: taskIdSchema }), // Valida taskId de la URL
     taskController.deleteTaskHandler
 );
+
+// Esto manejará rutas como /api/projects/:projectId/tasks/:taskId/messages
+router.use('/:taskId/messages', chatMessageRoutes); 
+// Aquí, :taskId ya es capturado por este router (taskRoutes), y gracias a mergeParams
+// en chatMessageRoutes, chatMessageRoutes también podrá acceder a req.params.taskId.
 
 export default router;

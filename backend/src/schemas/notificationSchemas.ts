@@ -11,3 +11,18 @@ export const createNotificationSchema = z.object({
     recursoTipo: z.nativeEnum(TipoRecursoNotificacion).optional().nullable(),
 });
 export type CreateNotificationInput = z.infer<typeof createNotificationSchema>;
+
+export const notificationIdParamSchema = z.object({
+    notificationId: z.string().regex(/^\d+$/, "ID de notificación debe ser un número").transform(val => parseInt(val, 10)),
+});
+
+export const getNotificationsQuerySchema = z.object({
+    soloNoLeidas: z.preprocess(
+        (val) => val === 'true' || val === true, // Convierte 'true' string a boolean
+        z.boolean().optional()
+    ),
+    // Puedes añadir paginación si es necesario
+    // page: z.coerce.number().int().min(1).optional().default(1),
+    // limit: z.coerce.number().int().min(1).max(50).optional().default(10),
+});
+export type GetNotificationsQuery = z.infer<typeof getNotificationsQuerySchema>;
