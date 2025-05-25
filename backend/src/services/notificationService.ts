@@ -104,31 +104,41 @@ export const markTaskChatNotificationsAsRead = async (
     taskId: number
 ): Promise<{ count: number }> => {
     console.log(`[NotificationService - STEP 3] markTaskChatNotificationsAsRead llamado para userId: ${userId}, taskId: ${taskId}`);
+    
+    // Construimos la parte de la URL que identifica la tarea
+    const targetUrlPart = `/tasks/${taskId}`; 
+
     const result = await prisma.notificacion.updateMany({
         where: {
             usuarioId: userId,
             tipo: TipoNotificacion.NUEVO_MENSAJE_TAREA,
-            recursoId: taskId,
-            recursoTipo: TipoRecursoNotificacion.MENSAJE_CHAT_TAREA,
+            // Ya no filtramos por recursoId y recursoTipo aquí directamente,
+            // sino que nos basamos en que la urlDestino apunte a esta tarea.
+            // Esto es un poco menos preciso si varias notificaciones tuvieran URLs muy similares,
+            // pero dado que urlDestino incluye /tasks/:taskId, debería ser bastante específico.
+            // Alternativamente, si quisieras ser muy preciso, tendrías que:
+            // 1. Obtener todos los IDs de MensajeChatTarea para la taskId.
+            // 2. Usar esos IDs en un `recursoId: { in: [messageIds...] }`.
+            // Por ahora, el filtro por urlDestino es más simple de implementar.
+            urlDestino: {
+                contains: targetUrlPart, // Busca notificaciones cuya URL contenga /tasks/ID_DE_LA_TAREA
+            },
             leida: false,
         },
         data: {
             leida: true,
         },
     });
-    console.log(`[NotificationService - STEP 4] Notificaciones de chat actualizadas a leida=true: ${result.count} para tarea ${taskId}, usuario ${userId}.`);
+    console.log(`[NotificationService - STEP 4] Notificaciones de chat (que contienen '${targetUrlPart}') actualizadas a leida=true: ${result.count} para usuario ${userId}.`);
 
-    // La variable unreadCount solo se define y usa si result.count > 0
     if (result.count > 0) { 
-        const unreadCount = await prisma.notificacion.count({ // 'unreadCount' se define aquí
+        const unreadCount = await prisma.notificacion.count({
             where: { usuarioId: userId, leida: false }
         });
-        // La línea 129 (o similar) debería ser esta o la de emitToUser:
         console.log(`[NotificationService - STEP 5] Nuevo conteo total de no leídas para usuario ${userId} es ${unreadCount}. Emitiendo 'unread_count_updated'.`);
         emitToUser(userId.toString(), 'unread_count_updated', { count: unreadCount });
     } else {
-        // Este console.log NO debe intentar usar 'unreadCount' ya que no está definido en este scope
-        console.log(`[NotificationService - STEP 5] No se actualizaron notificaciones (quizás ya estaban leídas o no habían), no se emite 'unread_count_updated' por esta acción.`);
+        console.log(`[NotificationService - STEP 5] No se actualizaron notificaciones (quizás ya estaban leídas o no habían que coincidieran con el filtro de URL), no se emite 'unread_count_updated' por esta acción.`);
     }
     return { count: result.count };
 };
