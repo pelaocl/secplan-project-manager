@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-    Container, Box, Typography, CircularProgress, Alert, Paper, Grid, Chip, Divider, Button, Stack, Tooltip, IconButton, useTheme, List // SvgIcon no se usaba
+    Container, Box, Typography, CircularProgress, Alert, Paper, Grid, Chip, Divider, Button, Stack, Tooltip, IconButton, useTheme, List
 } from '@mui/material';
 
 // --- Iconos ---
@@ -35,27 +35,26 @@ import { lookupApi } from '../services/lookupApi';
 import { 
     Project, 
     TipoMoneda, 
-    // User, // No se usa directamente aquí si los objetos vienen completos
     Task, 
     EstadoTarea,
     PrioridadTarea,
     FormOptionsResponse, 
     CreateTaskFrontendInput,
     TaskFormValues,
-    // ChatMessage // No se usa directamente aquí
+    ChatMessage 
 } from '../types';
 import ProjectMap from '../components/ProjectMap';
 import IconDetailItem from '../components/IconDetailItem';
 import SectionPaper from '../components/layout/SectionPaper';
 import { ApiError } from '../services/apiService';
-import { useAuthStore, useIsAuthenticated, useCurrentUserRole } from '../store/authStore'; // useAuthStore para currentUser
+import { useAuthStore, useIsAuthenticated, useCurrentUserRole } from '../store/authStore';
 import TaskListItem from '../components/TaskListItem'; 
 import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import { useForm, FormProvider, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { taskFormSchema } from '../schemas/taskFormSchema';
 import TaskForm from '../components/TaskForm';
-import { Snackbar } from '@mui/material'; // Ya estaba
+import { Snackbar } from '@mui/material';
 import TaskDetailModal from '../components/TaskDetailModal';
 import { socketService } from '../services/socketService';
 
@@ -79,7 +78,6 @@ function ProjectDetailPage() {
     
     const [errorProject, setErrorProject] = useState<string | null>(null);
     const [errorTasks, setErrorTasks] = useState<string | null>(null);
-    // const [errorLookups, setErrorLookups] = useState<string | null>(null); // Opcional si quieres error específico para lookups
 
     const [isSubmittingTask, setIsSubmittingTask] = useState<boolean>(false);
     const [taskFormError, setTaskFormError] = useState<string | null>(null);
@@ -92,7 +90,7 @@ function ProjectDetailPage() {
     
     const isAuthenticated = useIsAuthenticated();
     const userRole = useCurrentUserRole();
-    const currentUser = useAuthStore((state) => state.user); // Para el userId
+    const currentUser = useAuthStore((state) => state.user);
     const projectIdNum = id ? parseInt(id, 10) : NaN;
 
     const taskFormMethods = useForm<TaskFormValues>({
@@ -100,7 +98,7 @@ function ProjectDetailPage() {
         defaultValues: {
             titulo: '', descripcion: null, asignadoId: null, 
             fechaPlazo: null, prioridad: null, estado: EstadoTarea.PENDIENTE,
-            // participantesIds: [], // Este campo no está en tu TaskFormValues del schema
+            // participantesIds: [], // Lo quitaste del schema, está bien
         }
     });
 
@@ -117,38 +115,30 @@ function ProjectDetailPage() {
             setLoadingProject(true); 
             setLoadingLookups(true);
             setErrorProject(null); 
-            // setErrorLookups(null); // Si tuvieras estado de error para lookups
         }
-        setLoadingTasks(true); // Siempre se setea al intentar cargar/recargar tareas
+        setLoadingTasks(true); 
         setErrorTasks(null);
 
         try {
-            const promisesToFetch = [];
-
             if (isFullLoad) {
-                promisesToFetch.push(projectApi.getProjectById(projectIdNum));
-                promisesToFetch.push(lookupApi.getFormOptions());
+                const [fetchedProject, fetchedTasks, fetchedLookups] = await Promise.all([
+                    projectApi.getProjectById(projectIdNum),
+                    taskApi.getTasksByProjectId(projectIdNum),
+                    lookupApi.getFormOptions()
+                ]);
+                setProject(fetchedProject);
+                setTasks(fetchedTasks);
+                setLookupOptions(fetchedLookups);
+            } else { 
+                console.log(`[ProjectDetailPage] Recargando solo tareas para proyecto ID: ${projectIdNum}`);
+                const fetchedTasks = await taskApi.getTasksByProjectId(projectIdNum);
+                setTasks(fetchedTasks);
             }
-            // Las tareas siempre se intentan cargar/recargar
-            promisesToFetch.push(taskApi.getTasksByProjectId(projectIdNum));
-            
-            const results = await Promise.all(promisesToFetch);
-
-            let currentIndex = 0;
-            if (isFullLoad) {
-                setProject(results[currentIndex++]);
-                setLookupOptions(results[currentIndex++]);
-            }
-            setTasks(results[currentIndex++]);
-
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Ocurrió un error al cargar datos.";
             console.error("[ProjectDetailPage] Error en loadPageData:", errorMessage, err);
-            if (isFullLoad) {
-                setErrorProject(errorMessage);
-                // setErrorLookups(errorMessage);
-            }
-            setErrorTasks(errorMessage); // Si falla el Promise.all, todas las cargas fallaron
+            if (isFullLoad) setErrorProject(errorMessage);
+            setErrorTasks(errorMessage); 
         } finally {
             if (isFullLoad) {
                 setLoadingProject(false);
@@ -158,50 +148,48 @@ function ProjectDetailPage() {
         }
     }, [projectIdNum]);
 
-    // Efecto para carga inicial y cuando cambia el projectIdNum
     useEffect(() => {
         if (projectIdNum) {
             console.log(`[ProjectDetailPage] Efecto de carga inicial/proyecto cambiado. ID: ${projectIdNum}`);
-            loadPageData(true); // Carga completa
+            loadPageData(true); 
         }
-    }, [projectIdNum, loadPageData]); // loadPageData está memoizada con projectIdNum
+    }, [projectIdNum, loadPageData]);
 
-    // Efecto para Socket.IO: refrescar lista de tareas si cambian notificaciones del usuario actual
     useEffect(() => {
-        if (!isAuthenticated || !socketService.getSocket() || !projectIdNum || !currentUser?.id) {
+        if (!isAuthenticated || !socketService.getSocket() || !currentUser?.id || !project) {
             return;
         }
+        if (project.id !== projectIdNum) return;
 
-        const handleTaskListRefreshNeeded = (eventData?: {count: number}) => {
-            console.log(`[ProjectDetailPage] Evento 'unread_count_updated' recibido. Recargando lista de tareas para proyecto ${projectIdNum}. Data:`, eventData);
-            // Solo recargamos las tareas, ya que el contador global se actualiza en NotificationBell,
-            // y el indicador de "chat no leído" en la tarea depende de esta lista de tareas.
-            setLoadingTasks(true);
-            taskApi.getTasksByProjectId(projectIdNum)
-                .then(fetchedTasks => {
-                    setTasks(fetchedTasks);
-                    setErrorTasks(null);
-                })
-                .catch(err => {
-                    const errorMsg = err instanceof Error ? err.message : "Error recargando tareas tras evento socket.";
-                    setErrorTasks(errorMsg);
-                    console.error("[ProjectDetailPage] Error recargando tareas (socket):", errorMsg);
-                })
-                .finally(() => {
-                    setLoadingTasks(false);
-                });
+        const handleTaskChatStatusUpdate = (data: { taskId: number; tieneMensajesNuevosEnChat: boolean }) => {
+            if (tasks.some(t => t.id === data.taskId && t.proyectoId === project.id)) {
+                console.log('[ProjectDetailPage] Evento task_chat_status_updated recibido:', data);
+                setTasks(currentTasks => 
+                    currentTasks.map(t => 
+                        t.id === data.taskId 
+                        ? { ...t, tieneMensajesNuevosEnChat: data.tieneMensajesNuevosEnChat } 
+                        : t
+                    )
+                );
+            }
         };
         
-        socketService.on('unread_count_updated', handleTaskListRefreshNeeded);
+        const handleGlobalNotificationUpdate = (eventData?: {count: number}) => {
+            console.log(`[ProjectDetailPage] Evento 'unread_count_updated' recibido. Recargando lista de tareas para proyecto ${project.id}. Payload:`, eventData);
+            loadPageData(false);
+        };
+        
+        socketService.on('task_chat_status_updated', handleTaskChatStatusUpdate);
+        socketService.on('unread_count_updated', handleGlobalNotificationUpdate);
 
         return () => {
             const socket = socketService.getSocket();
             if (socket) {
-                socket.off('unread_count_updated', handleTaskListRefreshNeeded);
+                socket.off('task_chat_status_updated', handleTaskChatStatusUpdate);
+                socket.off('unread_count_updated', handleGlobalNotificationUpdate);
             }
-            console.log("[ProjectDetailPage] Limpiando listener de socket 'unread_count_updated'.");
         };
-    }, [isAuthenticated, projectIdNum, currentUser?.id]); // No incluir loadPageData aquí para evitar bucles si no es necesario
+    }, [isAuthenticated, currentUser?.id, project, projectIdNum, tasks, setTasks, loadPageData]);
 
     const handlePrint = () => { console.log("TODO: Imprimir ficha ID:", project?.id); alert("Impresión no implementada."); };
     
@@ -217,9 +205,8 @@ function ProjectDetailPage() {
     const handleCloseNewTaskModal = () => { setIsNewTaskModalOpen(false); };
 
     const onNewTaskSubmit: SubmitHandler<TaskFormValues> = async (data) => {
-        if (!project) return;
-        setIsSubmittingTask(true);
-        setTaskFormError(null);
+        if (!project || isNaN(projectIdNum)) return;
+        setIsSubmittingTask(true); setTaskFormError(null);
         try {
             const dataToSubmit: CreateTaskFrontendInput = {
                 ...data,
@@ -228,12 +215,7 @@ function ProjectDetailPage() {
             await taskApi.createTask(project.id, dataToSubmit);
             setSnackbarMessage("¡Tarea creada exitosamente!");
             handleCloseNewTaskModal();
-            // Recargar solo tareas después de crear una
-            setLoadingTasks(true);
-            taskApi.getTasksByProjectId(projectIdNum)
-                .then(setTasks)
-                .catch(err => setTasksError(err instanceof Error ? err.message : "Error recargando tareas."))
-                .finally(() => setLoadingTasks(false));
+            loadPageData(false); 
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : "Error al crear la tarea.";
             console.error("Error creando tarea:", err);
@@ -245,8 +227,7 @@ function ProjectDetailPage() {
     
     const handleViewTaskDetails = async (taskId: number) => {
         if (!project || isNaN(projectIdNum)) return;
-        setLoadingTaskDetail(true);
-        setTaskDetailErrorState(null);
+        setLoadingTaskDetail(true); setTaskDetailErrorState(null);
         try {
             const detailedTask = await taskApi.getTaskById(projectIdNum, taskId);
             setSelectedTaskForDetail(detailedTask);
@@ -261,7 +242,6 @@ function ProjectDetailPage() {
         }
     };
 
-    // Renderizado condicional principal
     if (loadingProject && !project) { 
         return ( <Box display="flex" justifyContent="center" alignItems="center" sx={{ mt: 4, height: '70vh' }}><CircularProgress /><Typography sx={{ ml: 2 }}>Cargando datos del proyecto...</Typography></Box> ); 
     }
@@ -274,10 +254,25 @@ function ProjectDetailPage() {
 
     const canManageTasks = isAuthenticated && (userRole === 'ADMIN' || userRole === 'COORDINADOR');
 
+    // --- DEFINICIÓN DE VARIABLES PARA CONDICIONALES JSX ---
+    const showFinancieraSection = isAuthenticated && project && 
+        (project.montoAdjudicado != null || 
+         project.lineaFinanciamientoId != null || 
+         project.codigoExpediente != null || 
+         project.fechaPostulacion != null || 
+         project.proyectoPriorizado === true || 
+         project.createdAt != null);
+
+    const showFechasNoAuthSection = !isAuthenticated && project && (project.createdAt != null || project.updatedAt != null);
+
+    const canRenderNewTaskModal = !!(lookupOptions && project && isNewTaskModalOpen); // Booleano explícito
+    const canRenderTaskDetailModal = !!(selectedTaskForDetail && project && isTaskDetailModalOpen); // Booleano explícito
+    // --- FIN DEFINICIÓN DE VARIABLES ---
+
     return (
         <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
             {/* Banner */}
-            <Box sx={{ boxShadow: theme.shadows[3], height: { xs: '250px', sm: '300px', md: '350px' }, position: 'relative', overflow: 'hidden', mb: 3, borderRadius: (theme.shape.borderRadius || 12) / 10, }} >
+            <Box sx={{ boxShadow: theme.shadows[3], height: { xs: '250px', sm: '300px', md: '350px' }, position: 'relative', overflow: 'hidden', mb: 3, borderRadius: (theme.shape.borderRadius || 4) / 10, }} > {/* Ajuste borderRadius del tema */}
                 <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
                     <ProjectMap locationPoint={project.location_point} areaPolygon={project.area_polygon} />
                 </Box>
@@ -286,7 +281,7 @@ function ProjectDetailPage() {
                     <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', textShadow: '1px 1px 3px rgba(0,0,0,0.7)' }}>{project.nombre}</Typography>
                     <Chip label={project.codigoUnico || '?'} size="medium" sx={{ backgroundColor: project.tipologia?.colorChip || 'rgba(255,255,255,0.3)', color: '#fff', fontSize: '1.4rem', fontWeight: 'bold', textShadow: '1px 1px 1px rgba(0,0,0,0.4)', border: '3px solid rgba(255,255,255,1)', px: 2, py: 2.3 }} />
                 </Box>
-                <Box sx={{ position: 'absolute', top: 0, left: 35, right: 0, zIndex: 3, p: { xs: 1, sm: 2 }, display: 'flex', justifyContent: 'space-between' }}>
+                <Box sx={{ position: 'absolute', top: 0, left: theme.spacing(2), right: theme.spacing(2), zIndex: 3, p: { xs: 1, sm: 2 }, display: 'flex', justifyContent: 'space-between' }}> {/* Ajustado left para usar theme.spacing */}
                     <Button variant="contained" size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/')} sx={{ backgroundColor: 'rgba(0, 0, 0, 0.4)', color: 'white', '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.6)' } }}>Volver</Button>
                     {isAuthenticated && (
                         <Stack direction="row" spacing={1}>
@@ -299,7 +294,7 @@ function ProjectDetailPage() {
 
             <Grid container spacing={3}>
                 {isAuthenticated && (
-                    <Grid item xs={12} md={lookupOptions && project.descripcion ? 8 : 12}> {/* Ajustar ancho */}
+                    <Grid item xs={12} md={(project.descripcion && lookupOptions) ? 8 : 12}>
                         <SectionPaper elevation={2}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                 <Typography variant="h6" gutterBottom component="div">Bitácora de Tareas</Typography>
@@ -308,7 +303,6 @@ function ProjectDetailPage() {
                                         Nueva Tarea
                                     </Button>
                                 )}
-                                {/* Loader para botón si lookups están cargando pero el usuario puede gestionar tareas */}
                                 {canManageTasks && !lookupOptions && loadingLookups && <CircularProgress size={20} />}
                             </Box>
                             <Divider sx={{ mb: 2 }} />
@@ -319,40 +313,88 @@ function ProjectDetailPage() {
                     </Grid>
                 )}
                 
-                {/* Columna para Descripción del Proyecto o Detalles/Chat de Tarea */}
                 <Grid item xs={12} md={isAuthenticated && lookupOptions ? 4 : (project.descripcion ? 12 : 0) }>
-                    {project.descripcion && ( // Mostrar siempre si hay descripción
-                        <SectionPaper elevation={2} sx={{height: isAuthenticated && lookupOptions ? 'calc(100% - 0px)' : 'auto' /* Ocupar altura si hay bitácora al lado */}}>
+                    {project.descripcion && (
+                        <SectionPaper elevation={2} sx={{height: isAuthenticated && lookupOptions ? 'calc(100% - 0px)' : 'auto' }}>
                             <Typography variant="h6" gutterBottom>Descripción del Proyecto</Typography>
                             <Divider sx={{ mb: 2 }} />
                             <Box 
-                                className="quill-content-display" 
+                                className="tiptap-content-display" 
                                 sx={{ 
-                                    maxHeight: isAuthenticated && lookupOptions ? 'calc(80vh - 200px)' : 'none', // Limitar altura si está al lado de la bitácora
+                                    maxHeight: isAuthenticated && lookupOptions ? 'calc(80vh - 200px)' : 'none', 
                                     overflowY: 'auto', 
-                                    lineHeight: 1.5, 
-                                    '& h1': { my: theme.spacing(1.5), fontSize: '1.5rem' }, 
-                                    '& h2': { my: theme.spacing(1.2), fontSize: '1.3rem' }, 
-                                    '& h3': { my: theme.spacing(1), fontSize: '1.15rem' }, 
-                                    '& p': { mb: theme.spacing(0.8) }, 
-                                    '& ul, & ol': { pl: theme.spacing(2.5), mb: theme.spacing(0.8) }, 
+                                    lineHeight: 1.6, // Ajustado para mejor legibilidad
+                                    '& h1': { my: theme.spacing(2), fontSize: '1.6rem', fontWeight: 500 }, 
+                                    '& h2': { my: theme.spacing(1.5), fontSize: '1.4rem', fontWeight: 500 }, 
+                                    '& h3': { my: theme.spacing(1), fontSize: '1.2rem', fontWeight: 500 }, 
+                                    '& p': { mb: theme.spacing(1.5) }, 
+                                    '& ul, & ol': { pl: theme.spacing(3), mb: theme.spacing(1.5) }, 
                                     '& a': { color: theme.palette.primary.main }, 
-                                    '& img': { maxWidth: '100%', height: 'auto', my: theme.spacing(1), borderRadius: theme.shape.borderRadius } 
+                                    '& img': { maxWidth: '100%', height: 'auto', my: theme.spacing(1.5), borderRadius: theme.shape.borderRadius } 
                                 }} 
                                 dangerouslySetInnerHTML={{ __html: project.descripcion }} />
+                        </SectionPaper>
+                    )}
+                    {isAuthenticated && !project.descripcion && lookupOptions && (
+                        <SectionPaper elevation={2} sx={{height: '100%'}}>
+                            <Typography variant="h6" gutterBottom>Detalles Adicionales</Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            <Typography variant="body2" color="text.secondary">(No hay descripción para este proyecto. Espacio para futuros detalles de tarea o chat activo)</Typography>
                         </SectionPaper>
                     )}
                 </Grid>
                             
                 <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Información Básica</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={BusinessIcon} label="Unidad Municipal" value={project.unidad?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CategoryIcon} label="Tipología" value={project.tipologia?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={InfoOutlinedIcon} label="Estado Actual" value={project.estado?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CalendarTodayIcon} label="Año Iniciativa" value={project.ano?.toString()} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Línea Financ." value={project.lineaFinanciamiento?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Ref. (${project.tipoMoneda})`} value={formatCurrency(project.monto, project.tipoMoneda)} /> </Grid> {isAuthenticated && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Proyectista" value={project.proyectista ? `${project.proyectista.name || '?'} (${project.proyectista.email})` : null} /> </Grid>} {isAuthenticated && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Formulador" value={project.formulador ? `${project.formulador.name || '?'} (${project.formulador.email})` : null} /> </Grid>} {isAuthenticated && project.colaboradores && project.colaboradores.length > 0 && ( <Grid item xs={12} md={4}> <IconDetailItem icon={GroupsIcon} label="Nº Colaboradores" value={project.colaboradores.length.toString()} /> </Grid> )} </Grid> </SectionPaper> </Grid>
                 <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Ubicación y Superficies</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> <Grid item xs={12} md={6}> <IconDetailItem icon={TravelExploreIcon} label="Sector" value={project.sector?.nombre} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Terreno (m²)" value={project.superficieTerreno?.toLocaleString('es-CL')} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Edificación (m²)" value={project.superficieEdificacion?.toLocaleString('es-CL')} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={LocationOnIcon} label="Dirección" value={project.direccion} /> </Grid> </Grid> </SectionPaper> </Grid>
-                {isAuthenticated && (project.montoAdjudicado != null || project.lineaFinanciamiento || project.codigoExpediente || project.fechaPostulacion || project.proyectoPriorizado != null || project.createdAt) && ( <> <Grid item xs={12} md={8}> <SectionPaper elevation={2} sx={{ height: '100%' }}> <Typography variant="h6" gutterBottom>Detalles Financiamiento</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> <Grid item xs={12} sm={6}> <IconDetailItem icon={ArticleIcon} label="Línea" value={project.lineaFinanciamiento?.nombre} /> </Grid> <Grid item xs={12} sm={6}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa?.nombre} /> </Grid> <Grid item xs={12} sm={6}> <IconDetailItem icon={StairsIcon} label="Etapa Actual" value={project.etapaActualFinanciamiento?.nombre} /> </Grid> <Grid item xs={12} sm={6}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Adj. (${project.tipoMoneda})`} value={formatCurrency(project.montoAdjudicado, project.tipoMoneda)} /> </Grid> <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="Cód. Expediente" value={project.codigoExpediente} /> </Grid> <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="ID Licitación" value={project.codigoLicitacion} /> </Grid> <Grid item xs={12} sm={6}> <IconDetailItem icon={EventIcon} label="Fecha Postulación" value={formatDate(project.fechaPostulacion)} /> </Grid> </Grid> </SectionPaper> </Grid> <Grid item xs={12} md={4}> <SectionPaper elevation={2} sx={{ height: '100%' }}> <Typography variant="h6" gutterBottom>Estado y Fechas</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> <Grid item xs={12}> <IconDetailItem icon={project.proyectoPriorizado ? CheckBoxIcon : CheckBoxOutlineBlankIcon} label="Priorizado" value={project.proyectoPriorizado ? 'Sí' : 'No'} /> </Grid> <Grid item xs={12}> <IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /> </Grid> <Grid item xs={12}> <IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /> </Grid> </Grid> </SectionPaper> </Grid> </> )}
-                {!isAuthenticated && ( <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Fechas</Typography> <Divider sx={{ mb: 3 }} /> <Grid container spacing={3} alignItems="flex-start"> <Grid item xs={12} md={6}> <IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /> </Grid> </Grid> </SectionPaper> </Grid> )}
+                
+                {/* SECCIÓN FINANCIERA Y ESTADO/FECHAS CON VARIABLE CONDICIONAL */}
+                {showFinancieraSection && ( 
+                    <> 
+                        <Grid item xs={12} md={8}> 
+                            <SectionPaper elevation={2} sx={{ height: '100%' }}> 
+                                <Typography variant="h6" gutterBottom>Detalles Financiamiento</Typography> 
+                                <Divider sx={{ mb: 2.5 }} /> 
+                                <Grid container spacing={3} alignItems="flex-start"> 
+                                    <Grid item xs={12} sm={6}> <IconDetailItem icon={ArticleIcon} label="Línea" value={project.lineaFinanciamiento?.nombre} /> </Grid> 
+                                    <Grid item xs={12} sm={6}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa?.nombre} /> </Grid> 
+                                    <Grid item xs={12} sm={6}> <IconDetailItem icon={StairsIcon} label="Etapa Actual" value={project.etapaActualFinanciamiento?.nombre} /> </Grid> 
+                                    <Grid item xs={12} sm={6}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Adj. (${project.tipoMoneda})`} value={formatCurrency(project.montoAdjudicado, project.tipoMoneda)} /> </Grid> 
+                                    <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="Cód. Expediente" value={project.codigoExpediente} /> </Grid> 
+                                    <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="ID Licitación" value={project.codigoLicitacion} /> </Grid> 
+                                    <Grid item xs={12} sm={6}> <IconDetailItem icon={EventIcon} label="Fecha Postulación" value={formatDate(project.fechaPostulacion)} /> </Grid> 
+                                </Grid> 
+                            </SectionPaper> 
+                        </Grid> 
+                        <Grid item xs={12} md={4}> 
+                            <SectionPaper elevation={2} sx={{ height: '100%' }}> 
+                                <Typography variant="h6" gutterBottom>Estado y Fechas</Typography> <Divider sx={{ mb: 2.5 }} /> 
+                                <Grid container spacing={3} alignItems="flex-start"> 
+                                    <Grid item xs={12}> <IconDetailItem icon={project.proyectoPriorizado ? CheckBoxIcon : CheckBoxOutlineBlankIcon} label="Priorizado" value={project.proyectoPriorizado ? 'Sí' : 'No'} /> </Grid> 
+                                    <Grid item xs={12}> <IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /> </Grid> 
+                                    <Grid item xs={12}> <IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /> </Grid> 
+                                </Grid> 
+                            </SectionPaper> 
+                        </Grid> 
+                    </> 
+                )}
+                {showFechasNoAuthSection && ( 
+                    <Grid item xs={12}> 
+                        <SectionPaper elevation={2}> 
+                            <Typography variant="h6" gutterBottom>Fechas</Typography> 
+                            <Divider sx={{ mb: 3 }} /> 
+                            <Grid container spacing={3} alignItems="flex-start"> 
+                                <Grid item xs={12} md={6}> <IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /> </Grid> 
+                                <Grid item xs={12} md={6}> <IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /> </Grid> 
+                            </Grid> 
+                        </SectionPaper> 
+                    </Grid> 
+                )}
             </Grid>
 
-            {lookupOptions && project && (
+            {/* MODALES CON VARIABLE CONDICIONAL */}
+            {canRenderNewTaskModal && (
                 <Dialog open={isNewTaskModalOpen} onClose={handleCloseNewTaskModal} maxWidth="md" fullWidth>
-                    <DialogTitle>Crear Nueva Tarea para "{project.nombre}"</DialogTitle>
+                    <DialogTitle>Crear Nueva Tarea para "{project!.nombre}"</DialogTitle> {/* project! es seguro por canRenderNewTaskModal */}
                     <FormProvider {...taskFormMethods}>
                         <form onSubmit={taskFormMethods.handleSubmit(onNewTaskSubmit)}>
                             <DialogContent>
@@ -360,8 +402,7 @@ function ProjectDetailPage() {
                                 {taskFormError && <Alert severity="error" sx={{ mb: 2 }}>{taskFormError}</Alert>}
                                 <TaskForm 
                                     isSubmitting={isSubmittingTask} 
-                                    lookupOptions={lookupOptions} 
-                                    // Props de RHF como control, errors, etc., se obtienen de FormProvider en TaskForm
+                                    lookupOptions={lookupOptions!} // lookupOptions! es seguro por canRenderNewTaskModal
                                 />
                             </DialogContent>
                             <DialogActions sx={{pb:2, pr:2}}>
@@ -373,9 +414,9 @@ function ProjectDetailPage() {
                 </Dialog>
             )}
 
-            {selectedTaskForDetail && project && ( // Asegurarse que project exista para TaskDetailModal si lo necesita
+            {canRenderTaskDetailModal && (
                 <TaskDetailModal
-                    task={selectedTaskForDetail}
+                    task={selectedTaskForDetail!} // selectedTaskForDetail! es seguro
                     open={isTaskDetailModalOpen}
                     onClose={() => { setIsTaskDetailModalOpen(false); setSelectedTaskForDetail(null); }}
                 />

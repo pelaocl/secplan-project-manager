@@ -104,3 +104,23 @@ export const deleteTaskHandler = async (req: AuthenticatedRequest, res: Response
         next(error);
     }
 };
+
+export const markTaskChatAsViewedHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const taskId = parseInt(req.params.taskId, 10); // taskId viene del parámetro de la ruta
+        const userPayload = req.user as UserPayload;
+
+        if (!userPayload) {
+            return res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+        }
+        if (isNaN(taskId)) { 
+            throw new BadRequestError("ID de tarea inválido en la URL."); 
+        }
+
+        // Asumo que taskService.markTaskChatAsViewed está definido
+        await taskService.markTaskChatAsViewed(taskId, userPayload.id); 
+        res.status(200).json({ message: "Chat de tarea marcado como visto." });
+    } catch (error) {
+        next(error);
+    }
+};

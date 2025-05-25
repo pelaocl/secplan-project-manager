@@ -61,6 +61,14 @@ router.delete(
     taskController.deleteTaskHandler
 );
 
+// PUT /api/projects/:projectId/tasks/:taskId/mark-chat-viewed
+router.put(
+    '/:taskId/mark-chat-viewed',
+    authenticateToken,
+    validateRequest({ params: taskIdSchema }), // Valida que taskId sea un número
+    taskController.markTaskChatAsViewedHandler // Asegúrate que este handler exista en taskController
+);
+
 // Esto manejará rutas como /api/projects/:projectId/tasks/:taskId/messages
 router.use('/:taskId/messages', chatMessageRoutes); 
 // Aquí, :taskId ya es capturado por este router (taskRoutes), y gracias a mergeParams

@@ -80,6 +80,8 @@ model User {
   notificaciones   Notificacion[]     @relation("NotificacionesParaUsuario")
 
   tareasDondeParticipa Tarea[] @relation("TareaParticipantes") // Tareas en las que participa (M2M)
+  
+  taskChatStatuses UserTaskChatStatus[] @relation("TaskChatStatusesByUser")
 
   @@map("users")
 }
@@ -239,6 +241,8 @@ model Tarea {
 
   mensajes MensajeChatTarea[]
 
+  chatStatuses     UserTaskChatStatus[] @relation("ChatStatusesForTask")
+
   @@map("tareas_bitacora")
 }
 
@@ -276,4 +280,16 @@ model Notificacion {
   recursoTipo TipoRecursoNotificacion?
 
   @@map("notificaciones")
+}
+
+model UserTaskChatStatus {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  user              User     @relation("TaskChatStatusesByUser", fields: [userId], references: [id], onDelete: Cascade)
+  taskId            Int
+  tarea             Tarea    @relation("ChatStatusesForTask", fields: [taskId], references: [id], onDelete: Cascade)
+  lastReadTimestamp DateTime // Timestamp de cuándo el usuario vio por última vez este chat
+
+  @@unique([userId, taskId]) // Clave única compuesta
+  @@map("user_task_chat_statuses")
 }

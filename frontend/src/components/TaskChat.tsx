@@ -1,60 +1,105 @@
 // frontend/src/components/TaskChat.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, TextField, Button, CircularProgress, Paper, Typography, IconButton, Alert } from '@mui/material';
+import { Box, Button, CircularProgress, Paper, Typography, IconButton, Alert, useTheme } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import DOMPurify from 'dompurify';
 
-import { ChatMessage, Task, User, UserPayload } from '../types';
+import { ChatMessage, UserPayload } from '../types'; // Task y User no se usan directamente como props
 import { useCurrentUser } from '../store/authStore';
 import ChatMessageItem from './ChatMessageItem';
 import { chatMessageService } from '../services/chatMessageApi';
 import { socketService } from '../services/socketService';
-import { notificationApi } from '../services/notificationApi';
-import TiptapEditor from './TiptapEditor'; // <-- AÑADIR IMPORT DE TIPTAPEDITOR
+import { notificationApi } from '../services/notificationApi'; // Para marcar notificaciones globales
+import { taskApi } from '../services/taskApi'; // <-- AÑADIDO para markTaskChatAsViewed
+import TiptapEditor from './TiptapEditor';
+
+// Configuración de Quill/Tiptap (asegúrate que esta sea la que funciona para ti)
+// Esta es la que incluye el handler de imagen y formatos completos que usaste en ProjectForm
+// Si quieres una toolbar más simple para el chat, puedes definir otra constante aquí.
+const chatEditorModules = {
+  toolbar: {
+    container: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link', 'image'],
+      ['clean']
+    ],
+    handlers: {
+      image: function(this: { quill: any }) { // Asumiendo que Tiptap lo maneja similar o que TiptapEditor no usa este handler directamente
+                                            // Si TiptapEditor usa EditorToolbar, esta config se pasa implícitamente.
+                                            // Para Tiptap, el handler de imagen se configura en las extensiones.
+                                            // Por simplicidad, si TiptapEditor usa la EditorToolbar que ya tiene el prompt, está bien.
+        const url = prompt('Por favor, ingrese la URL de la imagen:');
+        if (url && this.quill) { // this.quill es específico de ReactQuill
+          const quillInstance = this.quill;
+          const range = quillInstance.getSelection(true);
+          quillInstance.insertEmbed(range.index, 'image', url, 'user');
+        }
+      }
+    }
+  }
+};
+
+const chatEditorFormats = [
+  'header', 'bold', 'italic', 'underline',
+  'list', 'bullet', 'link', 'image'
+];
+
 
 interface TaskChatProps {
   projectId: number;
   taskId: number;
   initialMessages: ChatMessage[];
-  // No necesitamos projectUsers si remitente ya tiene nombre/email
 }
 
 const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages }) => {
-  const currentUser = useCurrentUser(); // Para saber quién es el remitente
+  const theme = useTheme();
+  const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
-  const [newMessageContent, setNewMessageContent] = useState<string>('');
-  const [isSending, setIsSending] = useState<false>(false);
+  const [newMessageContent, setNewMessageContent] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null); // Para auto-scroll
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll al final de los mensajes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // --- LÓGICA SOCKET.IO (Unirse/Dejar Sala y Escuchar Mensajes) ---
   useEffect(() => {
-    if (!taskId || !currentUser) {
-        console.log('[TaskChat] useEffect: taskId o currentUser no definidos, no se hace nada aún para sockets o marcar como leídas.');
+    if (!taskId || !currentUser || !projectId) { // projectId añadido al guard
+        console.warn('[TaskChat] useEffect: Faltan IDs o currentUser para configurar el chat.', { taskId, currentUser: !!currentUser, projectId });
         return;
     }
 
     const roomName = `task_chat_${taskId}`;
     
-    const markAssociatedChatNotificationsAsRead = async () => {
+    // Marcar las notificaciones GLOBALES de chat para esta tarea como leídas
+    const markGlobalChatNotificationsAsRead = async () => {
       try {
-        console.log(`[TaskChat - STEP 1] Intentando marcar notificaciones de chat como leídas para tarea ID: ${taskId}`);
+        console.log(`[TaskChat] Intentando marcar notificaciones GLOBALES de chat como leídas para tarea ID: ${taskId}`);
         const response = await notificationApi.markTaskChatNotificationsAsRead(taskId);
-        // Asumiendo que la API devuelve algo como { count: numeroDeNotificacionesActualizadas }
-        console.log(`[TaskChat - STEP 2] Llamada a API markTaskChatNotificationsAsRead exitosa. Respuesta:`, response);
+        console.log(`[TaskChat] Llamada a API markTaskChatNotificationsAsRead (global) exitosa. Respuesta:`, response);
       } catch (error) {
-        console.error(`[TaskChat - STEP 2 FAILED] Error al marcar notificaciones de chat como leídas para tarea ${taskId}:`, error);
+        console.error(`[TaskChat] Error al marcar notificaciones GLOBALES de chat como leídas para tarea ${taskId}:`, error);
       }
     };
 
-    markAssociatedChatNotificationsAsRead(); // Llamar al montar/actualizar dependencias
+    // Marcar el CHAT de esta tarea como VISTO por el usuario (actualiza UserTaskChatStatus)
+    const markChatItselfAsViewed = async () => {
+        try {
+            console.log(`[TaskChat] Intentando marcar chat como VISTO (UserTaskChatStatus) para tarea ${taskId}, proyecto ${projectId}`);
+            await taskApi.markTaskChatAsViewed(projectId, taskId); // <--- LLAMADA A LA NUEVA FUNCIÓN
+            console.log(`[TaskChat] Llamada a API markTaskChatAsViewed exitosa.`);
+            // El backend emitirá 'task_chat_status_updated', que ProjectDetailPage escuchará para quitar el punto rojo.
+        } catch (error) {
+            console.error(`[TaskChat] Error al marcar chat como VISTO para tarea ${taskId}:`, error);
+        }
+    };
 
-    // --- Lógica de Socket.IO para unirse a la sala y escuchar nuevos mensajes ---
+    markGlobalChatNotificationsAsRead(); // Para la campana de TopAppBar
+    markChatItselfAsViewed();           // Para el indicador de la lista de tareas
+
     console.log(`[TaskChat] Socket: Uniéndose a la sala: ${roomName} para tarea ${taskId}`);
     socketService.emit('join_task_chat_room', taskId.toString());
     
@@ -68,7 +113,6 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
         }
     };
     socketService.on('nuevo_mensaje_chat', newMessageHandler);
-    // --- Fin Lógica Socket.IO ---
 
     return () => {
         console.log(`[TaskChat] Socket: Dejando la sala: ${roomName} para tarea ${taskId}`);
@@ -78,55 +122,52 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
             socket.off('nuevo_mensaje_chat', newMessageHandler);
         }
     };
-}, [taskId, currentUser]); // Dependencias
+  }, [taskId, currentUser, projectId]); // projectId añadido como dependencia
 
-const handleSendMessage = async () => {
-  if (!newMessageContent || !currentUser) {
-      setError("El mensaje no puede estar vacío.");
-      return;
-  }
+  const handleSendMessage = async () => {
+    if (!newMessageContent || !currentUser) {
+        setError("El mensaje no puede estar vacío.");
+        return;
+    }
 
-  const cleanHtml = DOMPurify.sanitize(newMessageContent, { 
-      ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'br', 'img'],
-      ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
-  });
+    // Si tu EditorToolbar para Tiptap en el chat permite ciertos tags, ajústalos aquí.
+    // Esta configuración permite los mismos que la toolbar completa.
+    const cleanHtml = DOMPurify.sanitize(newMessageContent, { 
+        ALLOWED_TAGS: ['h1', 'h2', 'h3', 'p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'br', 'img'],
+        ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
+    });
 
-  // Verifica si después de sanitizar queda contenido real, no solo <p><br></p> o espacios.
-  // Puedes usar una expresión regular más simple o Tiptap tiene editor.isEmpty si tienes acceso a la instancia.
-  // Por ahora, una verificación de trim sobre el texto visible sería una aproximación.
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = cleanHtml;
-  const textContentFromCleanHtml = tempDiv.textContent || tempDiv.innerText || "";
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = cleanHtml;
+    const textContentFromCleanHtml = tempDiv.textContent || tempDiv.innerText || "";
 
-  if (!textContentFromCleanHtml.trim()) {
-      setError("El mensaje está vacío o solo contiene espacios.");
-      setNewMessageContent(null); // Limpia el input visualmente
-      return;
-  }
+    if (!textContentFromCleanHtml.trim()) {
+        setError("El mensaje está vacío o solo contiene espacios.");
+        setNewMessageContent(null);
+        return;
+    }
 
-  setIsSending(true);
-  setError(null);
-  try {
-    await chatMessageService.createChatMessage(projectId, taskId, { contenido: cleanHtml });
-    setNewMessageContent(null); // <-- Esto debería limpiar el TiptapEditor, ya que es controlado por esta prop 'value'
-                                // y TiptapEditor tiene un useEffect que reacciona a cambios en 'value'.
-  } catch (err) {
-    console.error("Error enviando mensaje:", err);
-    setError(err instanceof Error ? err.message : "No se pudo enviar el mensaje.");
-  } finally {
-    setIsSending(false);
-  }
-};
+    setIsSending(true);
+    setError(null);
+    try {
+      await chatMessageService.createChatMessage(projectId, taskId, { contenido: cleanHtml });
+      setNewMessageContent(null); 
+    } catch (err) {
+      console.error("Error enviando mensaje:", err);
+      setError(err instanceof Error ? err.message : "No se pudo enviar el mensaje.");
+    } finally {
+      setIsSending(false);
+    }
+  };
   
-  // Ref para el editor Quill para poder limpiarlo
-  const editorRef = useRef<ReactQuill>(null);
+  // const editorRef = useRef<ReactQuill>(null); // Ya no se necesita y fue eliminado
 
   if (!currentUser) {
     return <Typography>Debes estar autenticado para participar en el chat.</Typography>;
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '500px' /* o la altura que desees */ }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '500px' }}>
       <Paper variant="outlined" sx={{ flexGrow: 1, p: 2, overflowY: 'auto', mb: 2, backgroundColor: 'background.default' }}>
         {messages.length === 0 && (
           <Typography color="text.secondary" textAlign="center" sx={{ mt: 2 }}>
@@ -136,22 +177,21 @@ const handleSendMessage = async () => {
         {messages.map((msg) => (
           <ChatMessageItem key={msg.id} message={msg} />
         ))}
-        <div ref={messagesEndRef} /> {/* Para auto-scroll */}
+        <div ref={messagesEndRef} />
       </Paper>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, borderTop: 1, borderColor: 'divider', pt:1.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 1, borderTop: 1, borderColor: 'divider', pt:1.5 }}>
          <Box sx={{ flexGrow: 1 }}>
-          <TiptapEditor
-                  value={newMessageContent} // Pasa el estado actual
-                  onChange={setNewMessageContent} // Actualiza el estado
-                  placeholder="Escribe tu mensaje..."
-                  disabled={isSending}
-                  showHeadersInToolbar={false}
-                  // Si quieres una toolbar más simple para el chat, necesitaríamos modificar TiptapEditor
-                  // o EditorToolbar para aceptar una configuración de toolbar diferente.
-                  // Por ahora, usará la toolbar completa definida en EditorToolbar.tsx.
+            <TiptapEditor
+                value={newMessageContent}
+                onChange={setNewMessageContent}
+                placeholder="Escribe tu mensaje..."
+                disabled={isSending}
+                // Para el chat, queremos la toolbar SIN encabezados.
+                // TiptapEditor y EditorToolbar ya están configurados para aceptar esta prop.
+                showHeadersInToolbar={false} 
             />
          </Box>
-         <Button
+        <Button
             variant="contained"
             color="primary"
             size="medium"

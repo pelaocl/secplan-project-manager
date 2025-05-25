@@ -1,18 +1,19 @@
 // frontend/src/components/TaskListItem.tsx
 import React from 'react';
 import { ListItem, ListItemText, Typography, Chip, Paper, Box, IconButton, Tooltip, useTheme, Badge } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit'; // Para un futuro botón de editar
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'; // Para indicar chat o ver chat
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'; // Ícono para el punto indicador
-import { Task, EstadoTarea, PrioridadTarea } from '../types'; // Asegúrate que estos tipos y enums estén en ../types
+// EditIcon no se está usando en este snippet, puedes quitarlo si no planeas añadir el botón de editar aquí
+// import EditIcon from '@mui/icons-material/Edit'; 
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+// FiberManualRecordIcon no es necesario si usamos el Badge con variant="dot"
+// import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'; 
+import { Task, EstadoTarea, PrioridadTarea } from '../types';
 
 interface TaskListItemProps {
-  task: Task;
-  onViewDetails: (taskId: number) => void; // Para manejar el clic y abrir detalles/chat
-  // onEdit?: (taskId: number) => void; // Para un futuro botón de editar directo
+  task: Task; // Asegúrate que este tipo Task incluya tieneNotificacionesChatNoLeidasParaUsuarioActual?: boolean;
+  onViewDetails: (taskId: number) => void;
 }
 
-// Helpers para colores de estado/prioridad (puedes moverlos a un archivo de utils si los usas en más sitios)
+// Helpers para colores (sin cambios)
 export const getEstadoTareaColor = (estado?: EstadoTarea): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
   switch (estado) {
     case EstadoTarea.PENDIENTE: return 'warning';
@@ -33,27 +34,22 @@ export const getPrioridadTareaColor = (prioridad?: PrioridadTarea): "default" | 
     }
 };
 
-const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails /*, onEdit */ }) => {
-  const theme = useTheme(); // Para acceder a los colores del tema
+const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails }) => {
+  const theme = useTheme();
   const handleViewClick = () => {
     onViewDetails(task.id);
   };
-
-  // const handleEditClick = (e: React.MouseEvent) => {
-  //   e.stopPropagation(); // Evita que el click en el botón active el onClick del Paper
-  //   onEdit?.(task.id);
-  // };
 
   return (
     <Paper 
       elevation={2} 
       sx={{ 
         mb: 1.5, 
-        '&:hover': { boxShadow: 4, backgroundColor: 'action.hover' },
+        '&:hover': { boxShadow: theme.shadows[4], backgroundColor: theme.palette.action.hover }, // Usar theme.shadows
         cursor: 'pointer',
         transition: 'box-shadow 0.3s ease-in-out, background-color 0.3s ease-in-out',
       }} 
-      onClick={handleViewClick}
+      onClick={handleViewClick} // Click en todo el Paper para ver detalles
       role="button"
       tabIndex={0}
       onKeyPress={(e) => { if (e.key === 'Enter' || e.key === ' ') handleViewClick();}}
@@ -68,9 +64,7 @@ const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails /*, onE
               </Typography>
             </Box>
           }
-
-          secondaryTypographyProps={{ component: 'div' }} // Indica a MUI que el contenedor del 'secondary' sea un div
-
+          secondaryTypographyProps={{ component: 'div' }}
           secondary={
             <>
               <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -94,29 +88,46 @@ const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails /*, onE
             </>
           }
         />
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 1 }}>
-            <Tooltip title={task.tieneNotificacionesChatNoLeidasParaUsuarioActual ? "Ver Chat (Nuevos mensajes)" : "Ver Chat / Detalles"}>
-                 <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleViewClick(); }} aria-label={`Ver chat de tarea ${task.titulo}`}> {/* Detener propagación para que onClick del Paper no se llame dos veces si el Paper también tiene onClick */}
-                    {/* --- INDICADOR DE CHAT NO LEÍDO CON BADGE --- */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 1, mt: -0.5 /* Ajuste para alinear mejor con el título */ }}>
+            <Tooltip title={task.tieneMensajesNuevosEnChat  ? "Ver Chat (Nuevos mensajes)" : "Ver Chat / Detalles"}>
+                {/* El IconButton ahora solo contiene el Badge y el Icono de Chat */}
+                {/* El onClick del IconButton llama a handleViewClick para mantener la misma acción */}
+                <IconButton 
+                    size="small" 
+                    onClick={(e) => { 
+                        e.stopPropagation(); // Evita que el clic se propague al Paper si ya lo maneja handleViewClick
+                        handleViewClick(); 
+                    }} 
+                    aria-label={`Ver chat de tarea ${task.titulo}`}
+                >
                     <Badge 
                         color="error" 
                         variant="dot" 
-                        invisible={!task.tieneNotificacionesChatNoLeidasParaUsuarioActual}
-                        sx={{
-                            '& .MuiBadge-dot': { // Estilos para el punto del badge
-                                minWidth: '8px',
-                                height: '8px',
-                                borderRadius: '50%',
-                                // Podrías ajustar la posición del badge si es necesario
-                                // transform: 'scale(1) translate(50%, -50%)', 
-                            }
-                        }}
+                        invisible={!task.tieneMensajesNuevosEnChat} // Usa tu flag aquí
+                        // Estilos opcionales para el punto del badge si necesitas ajustarlo
+                        // sx={{
+                        //     '& .MuiBadge-dot': {
+                        //         minWidth: '8px',
+                        //         height: '8px',
+                        //         borderRadius: '50%',
+                        //         transform: 'scale(1) translate(50%, -50%)', // Ejemplo de posicionamiento
+                        //         top: '2px', // Ejemplo
+                        //         right: '2px', // Ejemplo
+                        //     }
+                        // }}
                     >
                         <ChatBubbleOutlineIcon fontSize="small" />
                     </Badge>
-
                 </IconButton>
             </Tooltip>
+            {/* Aquí podrías añadir el botón de Editar Tarea si lo deseas */}
+            {/* {onEdit && (
+                <Tooltip title="Editar Tarea">
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); onEdit(task.id); }} aria-label={`Editar tarea ${task.titulo}`} sx={{ mt: 0.5 }}>
+                        <EditIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            )} */}
         </Box>
       </ListItem>
     </Paper>
