@@ -17,9 +17,10 @@ import NotesIcon from '@mui/icons-material/Notes'; // Para Párrafo
 
 interface EditorToolbarProps {
   editor: Editor | null;
+  showHeaders?: boolean; // <-- NUEVA PROP (default a true)
 }
 
-const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor }) => {
+const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, showHeaders = true }) => {
   if (!editor) {
     return null;
   }
@@ -45,33 +46,41 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor }) => {
 
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', borderBottom: 1, borderColor: 'divider', p: 0.5, gap: 0.5, mb:1 }}>
-      <ToggleButtonGroup size="small" exclusive aria-label="text formatting">
-        <Tooltip title="Párrafo">
-          <ToggleButton
-            value="paragraph"
-            selected={editor.isActive('paragraph')}
-            onClick={() => editor.chain().focus().setParagraph().run()}
-            aria-label="Párrafo"
-          >
-            <NotesIcon />
-          </ToggleButton>
-        </Tooltip>
-        {[1, 2, 3].map((level) => (
-          <Tooltip title={`Encabezado ${level}`} key={level}>
-            <ToggleButton
-              value={`h${level}`}
-              selected={editor.isActive('heading', { level })}
-              onClick={() => editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run()}
-              aria-label={`Encabezado ${level}`}
-            >
-              {level === 1 && <LooksOneIcon />}
-              {level === 2 && <LooksTwoIcon />}
-              {level === 3 && <Looks3Icon />}
-            </ToggleButton>
-          </Tooltip>
-        ))}
-      </ToggleButtonGroup>
-      <Divider flexItem orientation="vertical" sx={{ mx: 0.5, my: 1 }} />
+      
+      {/* --- GRUPO DE ENCABEZADOS Y PÁRRAFO (CONDICIONAL) --- */}
+      {showHeaders && (
+        <>
+          <ToggleButtonGroup size="small" exclusive aria-label="formatos de texto y encabezado">
+            <Tooltip title="Párrafo">
+              <ToggleButton
+                value="paragraph"
+                selected={editor.isActive('paragraph')}
+                onClick={() => editor.chain().focus().setParagraph().run()}
+                aria-label="Párrafo"
+              >
+                <NotesIcon fontSize="small"/>
+              </ToggleButton>
+            </Tooltip>
+            {[1, 2, 3].map((level) => (
+              <Tooltip title={`Encabezado ${level}`} key={level}>
+                <ToggleButton
+                  value={`h${level}`}
+                  selected={editor.isActive('heading', { level: level as 1 | 2 | 3 })}
+                  onClick={() => editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run()}
+                  aria-label={`Encabezado ${level}`}
+                >
+                  {level === 1 && <LooksOneIcon fontSize="small"/>}
+                  {level === 2 && <LooksTwoIcon fontSize="small"/>}
+                  {level === 3 && <Looks3Icon fontSize="small"/>}
+                </ToggleButton>
+              </Tooltip>
+            ))}
+          </ToggleButtonGroup>
+          <Divider flexItem orientation="vertical" sx={{ mx: 0.5, my: 1 }} />
+        </>
+      )}
+      {/* --- FIN GRUPO CONDICIONAL --- */}
+
       <ToggleButtonGroup size="small" aria-label="text formatting">
         <Tooltip title="Negrita (Ctrl+B)">
             <ToggleButton value="bold" selected={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} aria-label="Negrita">

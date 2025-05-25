@@ -8,15 +8,17 @@ import Image from '@tiptap/extension-image';
 import Underline from '@tiptap/extension-underline'; // Tiptap requiere Underline como extensión separada
 import EditorToolbar from './EditorToolbar'; // La toolbar que acabamos de crear
 import { Box } from '@mui/material';
+import Placeholder from '@tiptap/extension-placeholder'; // Importa la extensión Placeholder
 
 interface TiptapEditorProps {
   value: string | null; // HTML string
   onChange: (htmlContent: string | null) => void;
   placeholder?: string;
   disabled?: boolean;
+  showHeadersInToolbar?: boolean; // <-- NUEVA PROP (default a true)
 }
 
-const TiptapEditor: React.FC<TiptapEditorProps> = ({ value, onChange, placeholder, disabled = false }) => {
+const TiptapEditor: React.FC<TiptapEditorProps> = ({ value, onChange, placeholder, disabled = false, showHeadersInToolbar = true }) => {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -51,7 +53,7 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({ value, onChange, placeholde
     editable: !disabled,
     editorProps: {
       attributes: {
-        // class: 'prosemirror-editor-class', // Si quieres una clase específica en el editor
+        class: 'prosemirror-editor-class', // Si quieres una clase específica en el editor
       },
     },
     onUpdate: ({ editor: currentEditor }: EditorEvents['update']) => {
@@ -76,19 +78,25 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({ value, onChange, placeholde
 
 
   return (
-    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, 
-                '& .ProseMirror': { minHeight: '150px', p: 1, '&:focus': {outline: 'none'} },
-                '& .ProseMirror p.is-editor-empty:first-of-type::before': { // De :first-child a :first-of-type
-                    content: `"${placeholder || 'Escribe aquí...'}"`,
-                    float: 'left',
-                    color: '#adb5bd',
-                    pointerEvents: 'none',
-                    height: 0,
-                  }
-            }}
-    >
-      <EditorToolbar editor={editor} />
-      <EditorContent editor={editor} style={{minHeight: '150px'}}/>
+      <Box sx={{ 
+          border: 1, borderColor: 'divider', borderRadius: 1,
+          bgcolor: disabled ? 'action.disabledBackground' : 'background.paper', // Fondo si está deshabilitado
+          '& .ProseMirror': { 
+              minHeight: '150px', 
+              p: 1.5, // Un poco más de padding interno
+              '&:focus': {outline: 'none'} 
+          },
+          // Estilo para el placeholder de Tiptap
+          '& .ProseMirror p.is-editor-empty:first-of-type::before': {
+              content: 'attr(data-placeholder)', // Usa el atributo data-placeholder
+              float: 'left',
+              color: 'text.disabled', // Usa un color del tema
+              pointerEvents: 'none',
+              height: 0,
+          }
+      }}>
+      {!disabled && <EditorToolbar editor={editor} showHeaders={showHeadersInToolbar} />} {/* Pasar la prop */}
+      <EditorContent editor={editor} />
     </Box>
   );
 };

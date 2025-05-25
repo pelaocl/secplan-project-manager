@@ -12,36 +12,6 @@ import { socketService } from '../services/socketService';
 import { notificationApi } from '../services/notificationApi';
 import TiptapEditor from './TiptapEditor'; // <-- AÑADIR IMPORT DE TIPTAPEDITOR
 
-// Configuración de Quill para el chat (puede ser más simple que para descripciones)
-const chatQuillModules  = {
-  toolbar: {
-      container: [
-        [{ 'header': [1, 2, 3, false] }],
-        ['bold', 'italic', 'underline'],
-        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-        ['link', 'image'], // Usará el handler simple de abajo
-        ['clean']
-      ],
-      handlers: {
-        image: function(this: { quill: any }) { // Handler simple para imagen
-          const url = prompt('Por favor, ingrese la URL de la imagen:');
-          if (url) {
-            const quillInstance = this.quill;
-            const range = quillInstance.getSelection(true);
-            quillInstance.insertEmbed(range.index, 'image', url, 'user');
-          }
-        }
-      }
-    }
-};
-
-const chatQuillFormats = [
-  'header',
-  'bold', 'italic', 'underline',
-  'list', 'bullet',
-  'link', 'image'
-];
-
 interface TaskChatProps {
   projectId: number;
   taskId: number;
@@ -110,33 +80,43 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
     };
 }, [taskId, currentUser]); // Dependencias
 
-  const handleSendMessage = async () => {
-    if (!newMessageContent.trim() || !currentUser) return;
-    const cleanHtml = DOMPurify.sanitize(newMessageContent, { 
-        ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'br', 'img'],
-        ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
-    });
-    if (!cleanHtml.trim() && !editorRef.current?.getEditor().getText().trim()) { // Doble check por si solo eran tags vacíos
-        setError("El mensaje no puede estar vacío después de la sanitización.");
-        return;
-    }
+const handleSendMessage = async () => {
+  if (!newMessageContent || !currentUser) {
+      setError("El mensaje no puede estar vacío.");
+      return;
+  }
 
-    setIsSending(true);
-    setError(null);
-    try {
-      // Pasar projectId a createChatMessage
-      await chatMessageService.createChatMessage(projectId, taskId, { contenido: cleanHtml }); // <--- PASAR projectId
-      setNewMessageContent('');
-      if (editorRef.current) {
-          editorRef.current.getEditor().setText('');
-      }
-    } catch (err) {
-      console.error("Error enviando mensaje:", err);
-      setError(err instanceof Error ? err.message : "No se pudo enviar el mensaje.");
-    } finally {
-      setIsSending(false);
-    }
-  };
+  const cleanHtml = DOMPurify.sanitize(newMessageContent, { 
+      ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'br', 'img'],
+      ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
+  });
+
+  // Verifica si después de sanitizar queda contenido real, no solo <p><br></p> o espacios.
+  // Puedes usar una expresión regular más simple o Tiptap tiene editor.isEmpty si tienes acceso a la instancia.
+  // Por ahora, una verificación de trim sobre el texto visible sería una aproximación.
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = cleanHtml;
+  const textContentFromCleanHtml = tempDiv.textContent || tempDiv.innerText || "";
+
+  if (!textContentFromCleanHtml.trim()) {
+      setError("El mensaje está vacío o solo contiene espacios.");
+      setNewMessageContent(null); // Limpia el input visualmente
+      return;
+  }
+
+  setIsSending(true);
+  setError(null);
+  try {
+    await chatMessageService.createChatMessage(projectId, taskId, { contenido: cleanHtml });
+    setNewMessageContent(null); // <-- Esto debería limpiar el TiptapEditor, ya que es controlado por esta prop 'value'
+                                // y TiptapEditor tiene un useEffect que reacciona a cambios en 'value'.
+  } catch (err) {
+    console.error("Error enviando mensaje:", err);
+    setError(err instanceof Error ? err.message : "No se pudo enviar el mensaje.");
+  } finally {
+    setIsSending(false);
+  }
+};
   
   // Ref para el editor Quill para poder limpiarlo
   const editorRef = useRef<ReactQuill>(null);
@@ -165,22 +145,23 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
                   onChange={setNewMessageContent} // Actualiza el estado
                   placeholder="Escribe tu mensaje..."
                   disabled={isSending}
+                  showHeadersInToolbar={false}
                   // Si quieres una toolbar más simple para el chat, necesitaríamos modificar TiptapEditor
                   // o EditorToolbar para aceptar una configuración de toolbar diferente.
                   // Por ahora, usará la toolbar completa definida en EditorToolbar.tsx.
             />
          </Box>
          <Button
-              variant="contained"
-              color="primary"
-              size="medium" // O 'small' si prefieres
-              onClick={handleSendMessage}
-              disabled={isSending || !newMessageContent.trim()}
-              endIcon={isSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
-              sx={{ ml: 1, borderRadius: '8px' /* Ajusta el redondeo */ }}
-          >
-              Enviar
-          </Button>
+            variant="contained"
+            color="primary"
+            size="medium"
+            onClick={handleSendMessage}
+            disabled={isSending || !newMessageContent || newMessageContent === "<p></p>" || (typeof newMessageContent === 'string' && !newMessageContent.replace(/<p><br><\/p>/g, '').trim()) }
+            endIcon={isSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+            sx={{ ml: 1, borderRadius: '8px', alignSelf: 'flex-end', mb: '1px' }}
+        >
+            Enviar
+        </Button>
       </Box>
       {error && <Alert severity="error" sx={{mt:1}}>{error}</Alert>}
     </Box>
