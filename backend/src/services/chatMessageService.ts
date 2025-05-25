@@ -54,6 +54,8 @@ export const createChatMessage = async (
 ): Promise<MensajeChatTarea> => {
     // 1. Verificar que la tarea exista y que el remitente tenga permiso para chatear en ella
     const tarea = await checkTaskChatAccess(taskId, remitentePayload);
+    console.log('[ChatMessageService] Detalles de la Tarea para el chat:', JSON.stringify(tarea, null, 2));
+    console.log(`[ChatMessageService] Remitente del mensaje (User ID): ${remitentePayload.id}, Nombre: ${remitentePayload.name}`);
 
     // 2. Crear el mensaje en la base de datos
     const nuevoMensaje = await prisma.mensajeChatTarea.create({
@@ -96,22 +98,22 @@ export const createChatMessage = async (
 
         let crearNotificacionParaEsteUsuario = false;
 
-        // Regla 1: Los usuarios con rol USUARIO (proyectistas, miembros del equipo)
-        // que son creador, asignado, o colaborador del proyecto reciben notificación de chat.
+        // Regla 1: Usuarios con rol USUARIO
         if (usuario.role === Role.USUARIO) {
+            // Si ya está en interesadosPotencialesIds (es creador, asignado, colaborador, proyectista, formulador)
+            // y es un USUARIO, se notifica.
             crearNotificacionParaEsteUsuario = true;
         } 
-        // Regla 2: ADMIN y COORDINADOR solo reciben notificación de este chat si son
-        // el creador de la tarea o el asignado a la tarea.
-        // (En el futuro, también si son @mencionados).
+        // Regla 2: Usuarios con rol ADMIN o COORDINADOR
         else if (usuario.role === Role.ADMIN || usuario.role === Role.COORDINADOR) {
-            if (tarea.creadorId === usuario.id || tarea.asignadoId === usuario.id) {
+            // Se notifican si son creador de la tarea, asignado a la tarea,
+            // O SI SON EL PROYECTISTA DEL PROYECTO AL QUE PERTENECE LA TAREA.
+            if (tarea.creadorId === usuario.id || 
+                tarea.asignadoId === usuario.id ||
+                tarea.proyecto.proyectistaId === usuario.id) { // <--- AÑADIR ESTA CONDICIÓN
                 crearNotificacionParaEsteUsuario = true;
             } else {
-                // Para Admin/Coordinador no directamente involucrados en esta tarea específica,
-                // no creamos una notificación de BD (y por ende no afectamos su campana global).
-                // Ellos verán el indicador en la lista de tareas si entran al proyecto.
-                console.log(`[ChatMessageService] No se crea notificación de chat para Admin/Coordinador (ID: ${usuario.id}) para tarea ${taskId} (no es creador ni asignado)`);
+                console.log(`[ChatMessageService] No se crea notificación de chat para Admin/Coordinador (ID: ${usuario.id}) para tarea ${taskId} (no es creador, ni asignado, ni proyectista del proyecto de la tarea)`);
             }
         }
         // (FUTURO: añadir lógica para 'if (mensajeContieneMencionPara(usuario.id)) crearNotificacionParaEsteUsuario = true;')

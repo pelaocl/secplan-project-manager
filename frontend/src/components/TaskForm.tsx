@@ -1,9 +1,9 @@
 // frontend/src/components/TaskForm.tsx (Archivo Nuevo)
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Controller, useFormContext, Control, FieldErrors } from 'react-hook-form';
 import {
     Box, Grid, TextField, Select, MenuItem, FormControl, InputLabel,
-    FormHelperText, Typography, Autocomplete, CircularProgress, useTheme
+    FormHelperText, Typography, Autocomplete, CircularProgress, useTheme, Chip
 } from '@mui/material';
 import ReactQuill from 'react-quill-new'; // O el editor que estés usando
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFnsV2"; 
@@ -57,7 +57,16 @@ interface TaskFormProps {
 const TaskForm: React.FC<TaskFormProps> = ({ isSubmitting, lookupOptions }) => {
     const theme = useTheme();
     // Obtenemos los métodos del formulario del FormProvider más cercano
-    const { control, formState: { errors }, setValue } = useFormContext<TaskFormValues>();
+    const { control, formState: { errors }, setValue, watch } = useFormContext<TaskFormValues>();
+
+    // --- DEFINICIÓN DE selectedParticipantesObjects ---
+    const currentParticipantesIds = watch('participantesIds') || []; // Obtiene los IDs actuales del formulario
+    // Asegúrate de que lookupOptions y lookupOptions.usuarios existan antes de filtrar
+    const selectedParticipantesObjects = lookupOptions?.usuarios // <--- USA 'lookupOptions'
+        ? lookupOptions.usuarios.filter(user => 
+            currentParticipantesIds.includes(user.id)
+          )
+        : []; // Si lookupOptions o lookupOptions.usuarios no existen, devuelve un array vacío
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
@@ -144,6 +153,48 @@ const TaskForm: React.FC<TaskFormProps> = ({ isSubmitting, lookupOptions }) => {
                         )}
                     />
                 </Grid>
+
+                {/* --- CAMPO PARTICIPANTES (Autocomplete Múltiple) --- */}
+                    <Grid item xs={12} sm={6}> {/* O el tamaño que le hayas dado */}
+                        <Controller
+                            name="participantesIds"
+                            control={control}
+                            render={({ field }) => (
+                                <Autocomplete
+                                    multiple
+                                    id="task-participantes-autocomplete"
+                                    options={lookupOptions.usuarios}
+                                    getOptionLabel={(option: UserOption) => 
+                                        `${option.name || 'Usuario Desconocido'} (${option.email})`
+                                    }
+                                    value={selectedParticipantesObjects}
+                                    onChange={(_, newValue) => {
+                                        field.onChange(newValue.map(user => user.id));
+                                    }}
+                                    isOptionEqualToValue={(option, value) => option.id === value.id}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            variant="outlined"
+                                            label="Participantes Adicionales"
+                                            placeholder="Seleccionar participantes..."
+                                            error={!!errors.participantesIds}
+                                            helperText={errors.participantesIds ? (errors.participantesIds as any).message || 'Error en participantes' : ''}
+                                        />
+                                    )}
+                                    renderTags={(value: readonly UserOption[], getTagProps) =>
+                                        value.map((option: UserOption, index: number) => {
+                                            const { key, ...tagProps } = getTagProps({ index }); // Asegúrate que getTagProps esté bien llamado
+                                            return <Chip key={key} label={`${option.name || option.email}`} {...tagProps} />;
+                                        })
+                                    }
+                                    disabled={isSubmitting}
+                                    ListboxProps={{ style: { maxHeight: 200, overflow: 'auto' } }}
+                                />
+                            )}
+                        />
+                    </Grid>
+                {/* --- FIN CAMPO PARTICIPANTES --- */}
 
                 <Grid item xs={12} sm={6}>
                     {/* Fecha Plazo (DatePicker) */}

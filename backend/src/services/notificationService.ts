@@ -40,7 +40,6 @@ export const createDBNotification = async (
     }
 };
 
-
 export const getNotificationsForUser = async (
     userId: number, 
     soloNoLeidas?: boolean

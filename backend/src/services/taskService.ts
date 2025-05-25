@@ -8,111 +8,202 @@ import {
     Project, 
     Task,
     TipoNotificacion,
-    TipoRecursoNotificacion
+    TipoRecursoNotificacion,
+    Prisma // Importa Prisma para Prisma.TareaCreateInput
 } from '@prisma/client';
 import { emitToUser } from '../socketManager';
 import { UserPayload } from '../types/express';
 import { notificationService } from './notificationService';
 
 // Helper para verificar permisos
-const checkProjectAccess = async (projectId: number, requestingUser: UserPayload): Promise<Project> => {
+const checkProjectAccess = async (
+    projectId: number, 
+    requestingUser: UserPayload
+): Promise<Project & { // El tipo de retorno incluye lo que necesitamos para los chequeos
+    proyectista?: { id: number } | null; 
+    formulador?: { id: number } | null;
+    colaboradores: { id: number }[];
+    tareas: { asignadoId: number | null }[];
+}> => {
     const project = await prisma.project.findUnique({
         where: { id: projectId },
         include: { 
-            proyectista: true, // Para el chequeo de roles
-            formulador: true,  // Para el chequeo de roles
-            colaboradores: { select: { id: true } } // Solo IDs para el chequeo some()
+            proyectista: { select: { id: true } },      // Solo necesitamos el ID para la comparación
+            formulador: { select: { id: true } },       // Solo necesitamos el ID
+            colaboradores: { select: { id: true } },    // Solo IDs para el chequeo .some()
+            tareas: {                                   // Incluimos las tareas del proyecto
+                select: {
+                    asignadoId: true                    // Solo el asignadoId para verificar
+                }
+            }
         }
+    });
+
+    if (!project) {
+        throw new NotFoundError(`Proyecto con ID ${projectId} no encontrado.`);
+    }
+
+    // Admins y Coordinadores tienen acceso
+    if (requestingUser.role === Role.ADMIN || requestingUser.role === Role.COORDINADOR) {
+        return project; // Devuelve el proyecto con los includes que hicimos
+    }
+
+    // Verificar si el usuario es parte del equipo del proyecto
+    const isProyectista = project.proyectistaId === requestingUser.id;
+    const isFormulador = project.formuladorId === requestingUser.id;
+    const isColaborador = project.colaboradores.some(colab => colab.id === requestingUser.id);
+    
+    // --- NUEVA VERIFICACIÓN ---
+    // Verificar si el usuario está asignado a alguna tarea DENTRO de este proyecto
+    const isTaskAssigneeInProject = project.tareas.some(tarea => tarea.asignadoId === requestingUser.id);
+    // --- FIN NUEVA VERIFICACIÓN ---
+
+    if (!isProyectista && !isFormulador && !isColaborador && !isTaskAssigneeInProject) {
+        throw new ForbiddenError('No tienes permiso para acceder a los recursos de tareas de este proyecto.');
+    }
+    
+    return project; // Devuelve el proyecto con los includes
+};
+
+export const createTask = async (
+    projectId: number,
+    data: CreateTaskInput, // CreateTaskInput ahora incluye participantesIds
+    creatorPayload: UserPayload 
+): Promise<Task> => { // Task de Prisma, que incluirá relaciones si se especifica
+
+    // 1. Obtener detalles del proyecto para verificar permisos y para notificaciones
+    const project = await prisma.project.findUnique({ 
+        where: { id: projectId },
+        // Incluye los campos necesarios para la lógica de permisos y notificaciones
+        select: { id: true, nombre: true, codigoUnico: true, proyectistaId: true } 
     });
     if (!project) {
         throw new NotFoundError(`Proyecto con ID ${projectId} no encontrado.`);
     }
 
-    if (requestingUser.role === Role.ADMIN || requestingUser.role === Role.COORDINADOR) {
-        return project;
+    // 2. Verificar Permisos de Creación de Tarea ACTUALIZADOS
+    const isProjectLeadByProyectistaId = project.proyectistaId === creatorPayload.id;
+    const isAdminOrCoordinator = creatorPayload.role === Role.ADMIN || creatorPayload.role === Role.COORDINADOR;
+
+    if (!isAdminOrCoordinator && !isProjectLeadByProyectistaId) {
+        throw new ForbiddenError('No tienes permiso para crear tareas en este proyecto (solo Admin, Coordinador o Proyectista a cargo del proyecto).');
     }
 
-    const isProyectista = project.proyectistaId === requestingUser.id;
-    const isFormulador = project.formuladorId === requestingUser.id;
-    const isColaborador = project.colaboradores.some(colab => colab.id === requestingUser.id);
-
-    if (!isProyectista && !isFormulador && !isColaborador) {
-        throw new ForbiddenError('No tienes permiso para acceder a este proyecto o sus tareas.');
-    }
-    return project;
-};
-
-
-export const createTask = async (
-    projectId: number, // projectId sigue siendo necesario para la conexión inicial
-    data: CreateTaskInput,
-    creatorPayload: UserPayload 
-): Promise<Task> => { 
-    // 1. Verificar permisos del creador (el proyecto se verifica implícitamente al intentar conectar)
-    if (creatorPayload.role !== Role.ADMIN && creatorPayload.role !== Role.COORDINADOR) {
-        throw new ForbiddenError('No tienes permiso para crear tareas en este proyecto.');
-    }
-
-    // 2. Validar asignadoId si se provee
+    // 3. Validar asignadoId y participantesIds (que los usuarios existan)
     if (data.asignadoId) {
-        const asignee = await prisma.user.findUnique({ where: { id: data.asignadoId }});
-        if (!asignee) {
-            throw new AppError(`Usuario asignado con ID ${data.asignadoId} no encontrado.`, 400);
+        const asignee = await prisma.user.findUnique({ where: { id: data.asignadoId }, select: {id: true} });
+        if (!asignee) throw new AppError(`Usuario asignado principal con ID ${data.asignadoId} no encontrado.`, 400);
+        // TODO (Opcional): Validar que 'asignadoId' sea parte del equipo del proyecto.
+    }
+    if (data.participantesIds && data.participantesIds.length > 0) {
+        const uniqueParticipantesIds = Array.from(new Set(data.participantesIds)); // Asegurar IDs únicos
+        const participantes = await prisma.user.findMany({ 
+            where: { id: { in: uniqueParticipantesIds } },
+            select: {id: true} 
+        });
+        if (participantes.length !== uniqueParticipantesIds.length) {
+            throw new AppError('Alguno de los IDs de participantes proporcionados no corresponde a un usuario válido.', 400);
         }
-        // TODO: Opcional - Verificar si el 'asignadoId' pertenece al equipo del proyecto.
+        // TODO (Opcional): Validar que todos los 'participantesIds' sean parte del equipo del proyecto.
     }
     
+    // 4. Preparar datos para la creación de la tarea
+    const tareaData: Prisma.TareaCreateInput = {
+        titulo: data.titulo,
+        descripcion: data.descripcion,
+        fechaPlazo: data.fechaPlazo,
+        estado: data.estado, // Ya tiene default en el schema Zod y Prisma
+        prioridad: data.prioridad,
+        proyecto: { connect: { id: project.id } },
+        creador: { connect: { id: creatorPayload.id } },
+    };
+
+    if (data.asignadoId) {
+        tareaData.asignado = { connect: { id: data.asignadoId } };
+    }
+
+    if (data.participantesIds && data.participantesIds.length > 0) {
+        // Filtramos para no incluir al asignadoId principal si ya está en participantesIds para evitar errores.
+        // O, si el asignadoId también debe estar explícitamente en participantes, no es necesario filtrar.
+        // Prisma maneja bien si se intenta conectar el mismo usuario en una relación M2M varias veces (solo lo conecta una vez).
+        // También filtramos al creador si está en la lista, para no añadirlo dos veces si la lógica es distinta.
+        const finalParticipantesIds = Array.from(new Set(data.participantesIds)).filter(id => id !== creatorPayload.id && id !== data.asignadoId);
+        if (finalParticipantesIds.length > 0) {
+            tareaData.participantes = { 
+                connect: finalParticipantesIds.map(id => ({ id }))
+            };
+        }
+    }
+        
     const newTask = await prisma.tarea.create({
-        data: {
-            titulo: data.titulo,
-            descripcion: data.descripcion,
-            fechaPlazo: data.fechaPlazo,
-            estado: data.estado,
-            prioridad: data.prioridad,
-            proyecto: { connect: { id: projectId } }, // Conecta con el proyecto
-            creador: { connect: { id: creatorPayload.id } },
-            ...(data.asignadoId && { asignado: { connect: { id: data.asignadoId } } }),
-        },
-        include: { // Incluye los datos necesarios para la respuesta y notificaciones
+        data: tareaData,
+        include: { 
             asignado: { select: { id: true, email: true, name: true, role: true }},
             creador: { select: { id: true, email: true, name: true, role: true }},
-            proyecto: { select: { id: true, nombre: true, codigoUnico: true }} // <--- INCLUIMOS EL PROYECTO AQUÍ
+            proyecto: { select: { id: true, nombre: true, codigoUnico: true, proyectistaId: true } },
+            participantes: { select: { id: true, name: true, email: true, role: true } } // Incluir participantes en la respuesta
         }
     });
 
-    // 3. Lógica de Notificación (DB y Socket.IO)
-    // Verificamos que newTask.proyecto y newTask.proyecto.nombre existan después del include
-    if (newTask.asignadoId && newTask.asignadoId !== creatorPayload.id && newTask.proyecto && newTask.proyecto.nombre) {
-        const message = `Se te ha asignado una nueva tarea: "${newTask.titulo}" en el proyecto "${newTask.proyecto.nombre}".`;
-        
-        try {
-            await notificationService.createDBNotification({
-               usuarioId: newTask.asignadoId,
-               tipo: TipoNotificacion.NUEVA_TAREA_ASIGNADA,
-               mensaje: message,
-               urlDestino: `/projects/${newTask.proyecto.id}/tasks/${newTask.id}`, // Usamos el id del proyecto desde newTask
-               recursoId: newTask.id,
-               recursoTipo: TipoRecursoNotificacion.TAREA
-            });
-        } catch (dbNotificationError) {
-            console.error("[TaskService] Error al crear notificación en DB para nueva tarea:", dbNotificationError);
-        }
+    // 5. Lógica de Notificación (NUEVA_TAREA_ASIGNADA y AÑADIDO_A_TAREA)
+    const usersToNotify = new Map<number, TipoNotificacion>();
 
-        emitToUser(newTask.asignadoId.toString(), 'nueva_tarea_asignada', { 
-            notification: {
-                mensaje: message,
-                tipo: TipoNotificacion.NUEVA_TAREA_ASIGNADA,
-                urlDestino: `/projects/${newTask.proyecto.id}/tasks/${newTask.id}`,
-                fechaCreacion: new Date().toISOString(),
-                leida: false
-            },
-            taskId: newTask.id,
-            titulo: newTask.titulo,
-            proyectoNombre: newTask.proyecto.nombre, // <--- AHORA USAMOS newTask.proyecto.nombre
-        });
+    // Notificar al asignado principal (si existe y no es el creador)
+    if (newTask.asignadoId && newTask.asignadoId !== creatorPayload.id) {
+        usersToNotify.set(newTask.asignadoId, TipoNotificacion.NUEVA_TAREA_ASIGNADA);
     }
 
-    return newTask; // newTask ya incluye la información del proyecto seleccionada
+    // Notificar a los participantes adicionales (si existen y no son el creador ni el asignado principal)
+    if (newTask.participantes) {
+        newTask.participantes.forEach(participante => {
+            if (participante.id !== creatorPayload.id && participante.id !== newTask.asignadoId) {
+                // Si ya tiene una notificación de asignado principal, no sobrescribir, o usar un tipo diferente.
+                // Por ahora, si ya está por ser notificado como asignado, esa notificación es más específica.
+                if (!usersToNotify.has(participante.id)) {
+                     // Podrías crear un nuevo TipoNotificacion.PARTICIPANTE_TAREA_ANADIDO
+                    usersToNotify.set(participante.id, TipoNotificacion.NUEVA_TAREA_ASIGNADA); 
+                }
+            }
+        });
+    }
+    
+    // Notificar al Project.proyectistaId (Proyectista a Cargo del Proyecto) si no es el creador y no está ya en la lista de notificados
+    if (project.proyectistaId && 
+        project.proyectistaId !== creatorPayload.id &&
+        !usersToNotify.has(project.proyectistaId)) {
+        usersToNotify.set(project.proyectistaId, TipoNotificacion.NUEVA_TAREA_ASIGNADA); // O un tipo "NUEVA_TAREA_EN_PROYECTO"
+    }
+
+    // Enviar las notificaciones
+    for (const [userId, tipoNotif] of usersToNotify) {
+        let message = "";
+        if (tipoNotif === TipoNotificacion.NUEVA_TAREA_ASIGNADA) {
+            if (userId === newTask.asignadoId) {
+                message = `Se te ha asignado la tarea: "${newTask.titulo}" en el proyecto "${project.nombre}".`;
+            } else if (newTask.participantes?.some(p => p.id === userId)) {
+                message = `Has sido añadido como participante a la tarea: "${newTask.titulo}" en el proyecto "${project.nombre}".`;
+            } else if (userId === project.proyectistaId) {
+                message = `Nueva tarea "${newTask.titulo}" creada en tu proyecto "${project.nombre}".`;
+            }
+        }
+        // Añadir más lógica de mensajes para otros tipos de notificación si es necesario.
+        if (!message) message = `Nueva actividad en la tarea "${newTask.titulo}" del proyecto "${project.nombre}".`; // Fallback
+
+        try {
+            await notificationService.createDBNotification({
+               usuarioId: userId,
+               tipo: tipoNotif,
+               mensaje: message,
+               urlDestino: `/projects/${project.id}/tasks/${newTask.id}`,
+               recursoId: newTask.id,
+               recursoTipo: TipoRecursoNotificacion.TAREA
+            }); // notificationService ya emite 'unread_count_updated'
+        } catch (e) { console.error(`[TaskService] Error creando notificación para usuario ${userId} para tarea ${newTask.id}:`, e); }
+    }
+    // Además de las notificaciones individuales, podrías emitir un evento general a la sala del proyecto
+    // ej: emitToRoom(`project_${project.id}`, 'new_task_in_project', { taskId: newTask.id, titulo: newTask.titulo });
+
+    return newTask;
 };
 
 export const getTasksByProjectId = async (

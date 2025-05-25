@@ -17,6 +17,7 @@ export const taskFormSchema = z.object({
         preprocessOptionalNumberOrNull,
         z.number().int().positive("Debe ser un ID válido.").nullable().optional()
     ),
+    participantesIds: z.array(z.number().int().positive()).optional().default([]),
     
     fechaPlazo: z.preprocess((arg) => {
         if (!arg || arg === '') return null; // Si está vacío o nulo, devuelve null

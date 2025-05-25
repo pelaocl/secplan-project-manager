@@ -12,8 +12,7 @@ export const createTaskSchema = z.object({
     estado: z.nativeEnum(EstadoTarea).optional().default(EstadoTarea.PENDIENTE),
     prioridad: z.nativeEnum(PrioridadTarea).optional().nullable(),
     asignadoId: z.number().int().positive().optional().nullable(),
-    // proyectoId vendrá del parámetro de la URL
-    // creadorId vendrá del usuario autenticado
+    participantesIds: z.array(z.number().int().positive()).optional().default([]),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 

@@ -70,25 +70,24 @@ model User {
   proyectosCreados    Project[]  @relation("ProyectistaProjects") // Asumo que este es el "proyectista" principal del proyecto
   proyectosFormulados Project[]  @relation("FormuladorProjects")
   proyectosColabora   Project[]  @relation("ProjectCollaborators")
-  
+
   // Relaciones con Tarea (actualizar la existente y añadir la nueva)
-  tareasAsignadas     Tarea[]    @relation("TareasAsignadasAUsuario") // Campo para tareas donde el usuario es el 'asignado'
-  tareasCreadas       Tarea[]    @relation("TareasCreadasPorUsuario")   // NUEVO: Tareas creadas por este usuario
+  tareasAsignadas Tarea[] @relation("TareasAsignadasAUsuario")
+  tareasCreadas   Tarea[] @relation("TareasCreadasPorUsuario") // NUEVO: Tareas creadas por este usuario
 
   // Relaciones con MensajeChatTarea y Notificacion (NUEVAS)
-  mensajesEnviados    MensajeChatTarea[] @relation("MensajesEnviadosPorUsuario")
-  notificaciones      Notificacion[]     @relation("NotificacionesParaUsuario")
+  mensajesEnviados MensajeChatTarea[] @relation("MensajesEnviadosPorUsuario")
+  notificaciones   Notificacion[]     @relation("NotificacionesParaUsuario")
 
-  // Para "leído por" en MensajeChatTarea (si lo implementas en v2):
-  // mensajesLeidos      MensajeChatTarea[] @relation("MensajesLeidosPorUsuarios")
+  tareasDondeParticipa Tarea[] @relation("TareaParticipantes") // Tareas en las que participa (M2M)
 
   @@map("users")
 }
 
 model Etiqueta {
-  id    Int     @id @default(autoincrement())
-  nombre String  @unique
-  color String  // ej. Hex color code '#RRGGBB'
+  id     Int    @id @default(autoincrement())
+  nombre String @unique
+  color  String // ej. Hex color code '#RRGGBB'
 
   // Relaciones
   usuarios User[] @relation("UserEtiquetas")
@@ -97,52 +96,52 @@ model Etiqueta {
 }
 
 model Project {
-  id          Int      @id @default(autoincrement())
-  codigoUnico String   @unique // Generado: [ABR_TIPOLOGIA]-[CORRELATIVO]
-  nombre      String
-  descripcion String?  // Interno
-  direccion   String?
-  superficieTerreno Float? // m²
+  id                    Int      @id @default(autoincrement())
+  codigoUnico           String   @unique // Generado: [ABR_TIPOLOGIA]-[CORRELATIVO]
+  nombre                String
+  descripcion           String? // Interno
+  direccion             String?
+  superficieTerreno     Float? // m²
   superficieEdificacion Float? // m² (nullable)
-  ano         Int?     // Año iniciativa
-  proyectoPriorizado Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  ano                   Int? // Año iniciativa
+  proyectoPriorizado    Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   // Relaciones Información Básica
   estadoId    Int?
-  estado      EstadoProyecto? @relation(fields: [estadoId], references: [id])
+  estado      EstadoProyecto?   @relation(fields: [estadoId], references: [id])
   unidadId    Int?
-  unidad      UnidadMunicipal? @relation(fields: [unidadId], references: [id])
+  unidad      UnidadMunicipal?  @relation(fields: [unidadId], references: [id])
   tipologiaId Int // Requerida
   tipologia   TipologiaProyecto @relation(fields: [tipologiaId], references: [id])
   sectorId    Int?
-  sector      Sector? @relation(fields: [sectorId], references: [id])
+  sector      Sector?           @relation(fields: [sectorId], references: [id])
 
   // Relaciones Equipo (Interno)
   proyectistaId Int?
-  proyectista User? @relation("ProyectistaProjects", fields: [proyectistaId], references: [id])
-  formuladorId Int?
-  formulador  User? @relation("FormuladorProjects", fields: [formuladorId], references: [id])
+  proyectista   User?  @relation("ProyectistaProjects", fields: [proyectistaId], references: [id])
+  formuladorId  Int?
+  formulador    User?  @relation("FormuladorProjects", fields: [formuladorId], references: [id])
   colaboradores User[] @relation("ProjectCollaborators") // Many-to-Many implícita por Prisma
 
   // Relaciones Información Financiera (Interno)
-  lineaFinanciamientoId Int?
-  lineaFinanciamiento   LineaFinanciamiento? @relation(fields: [lineaFinanciamientoId], references: [id])
-  programaId            Int?
-  programa              Programa? @relation(fields: [programaId], references: [id])
-  etapaFinanciamientoId Int?
+  lineaFinanciamientoId     Int?
+  lineaFinanciamiento       LineaFinanciamiento? @relation(fields: [lineaFinanciamientoId], references: [id])
+  programaId                Int?
+  programa                  Programa?            @relation(fields: [programaId], references: [id])
+  etapaFinanciamientoId     Int?
   etapaActualFinanciamiento EtapaFinanciamiento? @relation(fields: [etapaFinanciamientoId], references: [id])
-  monto                 Decimal? @db.Decimal(15, 2)
-  tipoMoneda            TipoMoneda @default(CLP)
-  codigoExpediente      String?
-  fechaPostulacion      DateTime? @db.Date // Guardar solo fecha
-  montoAdjudicado       Decimal? @db.Decimal(15, 2)
-  codigoLicitacion      String?
+  monto                     Decimal?             @db.Decimal(15, 2)
+  tipoMoneda                TipoMoneda           @default(CLP)
+  codigoExpediente          String?
+  fechaPostulacion          DateTime?            @db.Date // Guardar solo fecha
+  montoAdjudicado           Decimal?             @db.Decimal(15, 2)
+  codigoLicitacion          String?
 
   // --- Campos de Geometría ---
-  location_point        Json?    // Para GeoJSON de un Punto
-  area_polygon          Json?    // Para GeoJSON de un Polígono
+  location_point Json? // Para GeoJSON de un Punto
+  area_polygon   Json? // Para GeoJSON de un Polígono
 
   // Relaciones futuras
   tareas Tarea[] // Para bitácora
@@ -153,8 +152,8 @@ model Project {
 // --- Lookup Tables ---
 
 model EstadoProyecto {
-  id      Int       @id @default(autoincrement())
-  nombre  String    @unique
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
   proyectos Project[]
 
   @@map("estados_proyecto")
@@ -173,7 +172,7 @@ model TipologiaProyecto {
   id          Int       @id @default(autoincrement())
   nombre      String    @unique
   abreviacion String    @unique // Usada para codigoUnico
-  colorChip   String    // ej. Hex color code '#RRGGBB'
+  colorChip   String // ej. Hex color code '#RRGGBB'
   proyectos   Project[]
 
   @@map("tipologias_proyecto")
@@ -188,20 +187,20 @@ model Sector {
 }
 
 model LineaFinanciamiento {
-  id          Int        @id @default(autoincrement())
-  nombre      String     @unique
-  proyectos   Project[]
-  programas   Programa[]
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique
+  proyectos Project[]
+  programas Programa[]
 
   @@map("lineas_financiamiento")
 }
 
 model Programa {
-  id        Int       @id @default(autoincrement())
-  nombre    String
+  id                    Int                 @id @default(autoincrement())
+  nombre                String
   lineaFinanciamientoId Int
-  lineaFinanciamiento LineaFinanciamiento @relation(fields: [lineaFinanciamientoId], references: [id])
-  proyectos Project[]
+  lineaFinanciamiento   LineaFinanciamiento @relation(fields: [lineaFinanciamientoId], references: [id])
+  proyectos             Project[]
 
   @@unique([nombre, lineaFinanciamientoId])
   @@map("programas")
@@ -217,41 +216,42 @@ model EtapaFinanciamiento {
 
 // Modelo Básico para futura Bitácora
 model Tarea {
-  id                 Int          @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   titulo             String
-  descripcion        String?      // Almacenará HTML del editor de texto enriquecido
-  fechaCreacion      DateTime     @default(now())
-  fechaActualizacion DateTime     @updatedAt
-  fechaPlazo         DateTime?    // Deadline para la tarea
+  descripcion        String?
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+  fechaPlazo         DateTime?
 
-  estado             EstadoTarea  @default(PENDIENTE) // Usa el Enum definido arriba
-  prioridad          PrioridadTarea? // Opcional
+  estado    EstadoTarea     @default(PENDIENTE)
+  prioridad PrioridadTarea?
 
-  proyectoId         Int
-  proyecto           Project      @relation(fields: [proyectoId], references: [id], onDelete: Cascade) // Si se borra el proyecto, se borran sus tareas
+  proyectoId Int
+  proyecto   Project @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
 
-  creadorId          Int          // Quién creó la tarea (Coordinador/Admin)
-  creador            User         @relation("TareasCreadasPorUsuario", fields: [creadorId], references: [id])
+  creadorId Int
+  creador   User @relation("TareasCreadasPorUsuario", fields: [creadorId], references: [id])
 
-  asignadoId         Int?         // El principal responsable (Proyectista)
-  asignado           User?        @relation("TareasAsignadasAUsuario", fields: [asignadoId], references: [id])
+  asignadoId Int? // Responsable principal (opcional)
+  asignado   User? @relation("TareasAsignadasAUsuario", fields: [asignadoId], references: [id])
 
-  // Relación uno-a-muchos con los mensajes del chat
-  mensajes           MensajeChatTarea[]
+  participantes User[] @relation("TareaParticipantes") // Lista de usuarios que colaboran/participan
 
-  @@map("tareas_bitacora") // Mantienes el nombre de tu tabla
+  mensajes MensajeChatTarea[]
+
+  @@map("tareas_bitacora")
 }
 
 model MensajeChatTarea {
-  id           Int      @id @default(autoincrement())
-  contenido    String   // Almacenará HTML del editor de texto enriquecido
-  fechaEnvio   DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  contenido  String // Almacenará HTML del editor de texto enriquecido
+  fechaEnvio DateTime @default(now())
 
-  tareaId      Int
-  tarea        Tarea    @relation(fields: [tareaId], references: [id], onDelete: Cascade) // Si se borra la tarea, se borran sus mensajes
+  tareaId Int
+  tarea   Tarea @relation(fields: [tareaId], references: [id], onDelete: Cascade) // Si se borra la tarea, se borran sus mensajes
 
-  remitenteId  Int
-  remitente    User     @relation("MensajesEnviadosPorUsuario", fields: [remitenteId], references: [id])
+  remitenteId Int
+  remitente   User @relation("MensajesEnviadosPorUsuario", fields: [remitenteId], references: [id])
 
   // Para "leído por" (avanzado, considera para una v2):
   // leidoPor     User[]   @relation("MensajesLeidosPorUsuarios")
@@ -261,19 +261,19 @@ model MensajeChatTarea {
 
 model Notificacion {
   id            Int      @id @default(autoincrement())
-  mensaje       String   // Texto de la notificación
+  mensaje       String // Texto de la notificación
   leida         Boolean  @default(false)
   fechaCreacion DateTime @default(now())
-  urlDestino    String?  // Ej: /projects/1/tasks/5
+  urlDestino    String? // Ej: /projects/1/tasks/5
 
-  tipo          TipoNotificacion
-  
-  usuarioId     Int      // El usuario que recibe la notificación
-  usuario       User     @relation("NotificacionesParaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  tipo TipoNotificacion
+
+  usuarioId Int // El usuario que recibe la notificación
+  usuario   User @relation("NotificacionesParaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
 
   // Campos para vincular la notificación a un recurso específico
-  recursoId     Int?     // ID de la Tarea, MensajeChatTarea, etc.
-  recursoTipo   TipoRecursoNotificacion?
+  recursoId   Int? // ID de la Tarea, MensajeChatTarea, etc.
+  recursoTipo TipoRecursoNotificacion?
 
   @@map("notificaciones")
 }
