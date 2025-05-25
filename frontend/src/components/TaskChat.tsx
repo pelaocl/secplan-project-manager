@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, TextField, Button, CircularProgress, Paper, Typography, IconButton, Alert } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import ReactQuill from 'react-quill-new'; // O el editor que estés usando
 import DOMPurify from 'dompurify';
 
 import { ChatMessage, Task, User, UserPayload } from '../types';
@@ -11,7 +10,7 @@ import ChatMessageItem from './ChatMessageItem';
 import { chatMessageService } from '../services/chatMessageApi';
 import { socketService } from '../services/socketService';
 import { notificationApi } from '../services/notificationApi';
-
+import TiptapEditor from './TiptapEditor'; // <-- AÑADIR IMPORT DE TIPTAPEDITOR
 
 // Configuración de Quill para el chat (puede ser más simple que para descripciones)
 const chatQuillModules  = {
@@ -65,62 +64,51 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
 
   // --- LÓGICA SOCKET.IO (Unirse/Dejar Sala y Escuchar Mensajes) ---
   useEffect(() => {
-    if (!taskId || !currentUser) return;
+    if (!taskId || !currentUser) {
+        console.log('[TaskChat] useEffect: taskId o currentUser no definidos, no se hace nada aún para sockets o marcar como leídas.');
+        return;
+    }
 
     const roomName = `task_chat_${taskId}`;
+    
+    const markAssociatedChatNotificationsAsRead = async () => {
+      try {
+        console.log(`[TaskChat - STEP 1] Intentando marcar notificaciones de chat como leídas para tarea ID: ${taskId}`);
+        const response = await notificationApi.markTaskChatNotificationsAsRead(taskId);
+        // Asumiendo que la API devuelve algo como { count: numeroDeNotificacionesActualizadas }
+        console.log(`[TaskChat - STEP 2] Llamada a API markTaskChatNotificationsAsRead exitosa. Respuesta:`, response);
+      } catch (error) {
+        console.error(`[TaskChat - STEP 2 FAILED] Error al marcar notificaciones de chat como leídas para tarea ${taskId}:`, error);
+      }
+    };
+
+    markAssociatedChatNotificationsAsRead(); // Llamar al montar/actualizar dependencias
+
+    // --- Lógica de Socket.IO para unirse a la sala y escuchar nuevos mensajes ---
+    console.log(`[TaskChat] Socket: Uniéndose a la sala: ${roomName} para tarea ${taskId}`);
+    socketService.emit('join_task_chat_room', taskId.toString());
+    
     const newMessageHandler = (newMessage: ChatMessage) => {
-        console.log(`[TaskChat] Nuevo mensaje recibido para tarea ${taskId}:`, newMessage);
-        // Asegurarse que el mensaje es para esta tarea (aunque la sala debería garantizarlo)
+        console.log(`[TaskChat] Socket: Nuevo mensaje recibido para tarea ${taskId}:`, newMessage);
         if (newMessage.tareaId === taskId) {
             setMessages((prevMessages) => {
-                // Evitar duplicados si el mensaje ya fue añadido optimistamente
-                if (prevMessages.find(m => m.id === newMessage.id)) {
-                    return prevMessages;
-                }
+                if (prevMessages.find(m => m.id === newMessage.id)) return prevMessages;
                 return [...prevMessages, newMessage];
             });
         }
     };
-
-    // --- MARCAR NOTIFICACIONES DE CHAT COMO LEÍDAS AL ENTRAR ---
-    const markMessagesAsReadForThisTask = async () => {
-    try {
-        await notificationApi.markTaskChatNotificationsAsRead(taskId);
-        // El backend emitirá 'unread_count_updated', que NotificationBell escuchará.
-        // Para que el *indicador de punto en la lista de tareas* se actualice inmediatamente
-        // sin esperar un re-fetch completo de la lista de ProjectDetailPage,
-        // necesitaríamos una forma de decirle a ProjectDetailPage que re-evalúe esa tarea específica
-        // o que vuelva a cargar la lista de tareas.
-        // Por ahora, el indicador se actualizará la próxima vez que se cargue la lista de tareas.
-        console.log(`[TaskChat] Solicitud para marcar como leídas notificaciones de chat para tarea ${taskId} enviada.`);
-    } catch (error) {
-        console.error(`[TaskChat] Error al intentar marcar notificaciones de chat como leídas para tarea ${taskId}:`, error);
-    }
-    };
-    markMessagesAsReadForThisTask();
-
-    console.log(`[TaskChat] Uniéndose a la sala: ${roomName} para tarea ${taskId}`);
-    socketService.emit('join_task_chat_room', taskId.toString()); // El backend espera string o number
-    socketService.on('nuevo_mensaje_chat', newMessageHandler); // Escucha evento genérico de la sala
+    socketService.on('nuevo_mensaje_chat', newMessageHandler);
+    // --- Fin Lógica Socket.IO ---
 
     return () => {
-        console.log(`[TaskChat] Dejando la sala: ${roomName} para tarea ${taskId}`);
+        console.log(`[TaskChat] Socket: Dejando la sala: ${roomName} para tarea ${taskId}`);
         socketService.emit('leave_task_chat_room', taskId.toString());
-        // socketService.off('nuevo_mensaje_chat', newMessageHandler); // Desregistrar listener si es necesario
-        // Es importante desregistrar el listener si se registra múltiples veces o si el componente se destruye y recrea
-        // Para socket.io-client, si la instancia del socket es la misma y solo haces .on/.off,
-        // podrías necesitar manejar los listeners con más cuidado para evitar duplicados
-        // o usar un identificador único para el handler.
-        // Por ahora, si 'socketService.on' añade un nuevo listener cada vez,
-        // y el socket es persistente, necesitarás una función de limpieza para 'off'.
-        // Si 'socketService.on' reemplaza o es idempotente, está bien.
-        // Asumamos por ahora que el 'on' en tu socketService es simple.
-        // Una mejor práctica sería que socketService.on devuelva una función de desuscripción.
-        if (socketService.getSocket()) { // Solo si el socket existe
-            socketService.getSocket()?.off('nuevo_mensaje_chat', newMessageHandler);
+        const socket = socketService.getSocket();
+        if (socket) {
+            socket.off('nuevo_mensaje_chat', newMessageHandler);
         }
     };
-  }, [taskId, currentUser]); // Depende de taskId y currentUser para la lógica de salas/auth
+}, [taskId, currentUser]); // Dependencias
 
   const handleSendMessage = async () => {
     if (!newMessageContent.trim() || !currentUser) return;
@@ -172,15 +160,14 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
       </Paper>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, borderTop: 1, borderColor: 'divider', pt:1.5 }}>
          <Box sx={{ flexGrow: 1 }}>
-            <ReactQuill
-                ref={editorRef}
-                theme="snow" // O "bubble" para un look más simple en chat
-                value={newMessageContent}
-                onChange={setNewMessageContent}
-                modules={chatQuillModules}
-                formats={chatQuillFormats}
-                placeholder="Escribe tu mensaje..."
-                style={{ backgroundColor: 'white' }} // Para que se vea bien sobre fondo gris
+          <TiptapEditor
+                  value={newMessageContent} // Pasa el estado actual
+                  onChange={setNewMessageContent} // Actualiza el estado
+                  placeholder="Escribe tu mensaje..."
+                  disabled={isSending}
+                  // Si quieres una toolbar más simple para el chat, necesitaríamos modificar TiptapEditor
+                  // o EditorToolbar para aceptar una configuración de toolbar diferente.
+                  // Por ahora, usará la toolbar completa definida en EditorToolbar.tsx.
             />
          </Box>
          <Button

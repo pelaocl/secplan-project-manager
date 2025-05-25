@@ -102,29 +102,33 @@ export const markAllNotificationsAsReadForUser = async (
 export const markTaskChatNotificationsAsRead = async (
     userId: number,
     taskId: number
-): Promise<{ count: number }> => { // Devuelve el número de notificaciones actualizadas
+): Promise<{ count: number }> => {
+    console.log(`[NotificationService - STEP 3] markTaskChatNotificationsAsRead llamado para userId: ${userId}, taskId: ${taskId}`);
     const result = await prisma.notificacion.updateMany({
         where: {
             usuarioId: userId,
             tipo: TipoNotificacion.NUEVO_MENSAJE_TAREA,
             recursoId: taskId,
-            recursoTipo: TipoRecursoNotificacion.MENSAJE_CHAT_TAREA, // Importante que coincida
+            recursoTipo: TipoRecursoNotificacion.MENSAJE_CHAT_TAREA,
             leida: false,
         },
         data: {
             leida: true,
         },
     });
+    console.log(`[NotificationService - STEP 4] Notificaciones de chat actualizadas a leida=true: ${result.count} para tarea ${taskId}, usuario ${userId}.`);
 
-    console.log(`[NotificationService] Marcadas ${result.count} notificaciones de chat para tarea ${taskId} como leídas para usuario ${userId}.`);
-
-    // Después de marcar como leídas, emitir el nuevo conteo total de no leídas para el usuario
-    if (result.count > 0) { // Solo emitir si algo realmente cambió
-        const unreadCount = await prisma.notificacion.count({
+    // La variable unreadCount solo se define y usa si result.count > 0
+    if (result.count > 0) { 
+        const unreadCount = await prisma.notificacion.count({ // 'unreadCount' se define aquí
             where: { usuarioId: userId, leida: false }
         });
+        // La línea 129 (o similar) debería ser esta o la de emitToUser:
+        console.log(`[NotificationService - STEP 5] Nuevo conteo total de no leídas para usuario ${userId} es ${unreadCount}. Emitiendo 'unread_count_updated'.`);
         emitToUser(userId.toString(), 'unread_count_updated', { count: unreadCount });
-        console.log(`[NotificationService] Emitido 'unread_count_updated' para usuario ${userId} con count: ${unreadCount} tras marcar chats de tarea ${taskId} como leídos.`);
+    } else {
+        // Este console.log NO debe intentar usar 'unreadCount' ya que no está definido en este scope
+        console.log(`[NotificationService - STEP 5] No se actualizaron notificaciones (quizás ya estaban leídas o no habían), no se emite 'unread_count_updated' por esta acción.`);
     }
     return { count: result.count };
 };

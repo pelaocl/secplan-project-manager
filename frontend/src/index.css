@@ -1,0 +1,45 @@
+/* frontend/src/index.css o tu archivo CSS global principal */
+
+/* Estilos base para ProseMirror (usado por Tiptap) */
+.ProseMirror {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 150px; /* O la altura que desees */
+  }
+  
+  .ProseMirror:focus {
+    outline: none;
+    border-color: #2563eb; /* Azul, similar al foco de MUI, ajústalo a tu tema */
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  }
+  
+  /* Estilos básicos para elementos comunes si no los define tu tema globalmente */
+  .ProseMirror p {
+    margin-bottom: 0.75em;
+  }
+  .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    line-height: 1.2;
+  }
+  .ProseMirror ul, .ProseMirror ol {
+    padding-left: 1.5em;
+    margin-bottom: 0.75em;
+  }
+  .ProseMirror li > p { /* Evitar doble margen en párrafos dentro de LIs */
+      margin-bottom: 0.25em;
+  }
+  .ProseMirror img {
+    max-width: 100%;
+    height: auto;
+    display: block; /* Para que los márgenes funcionen bien */
+    margin: 0.5em 0;
+    border-radius: 4px;
+  }
+  .ProseMirror a {
+    color: #1976d2; /* Color primario de MUI por defecto, ajusta a tu tema */
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  /* Añade más estilos según necesites para otros elementos como blockquotes, code blocks, etc. */

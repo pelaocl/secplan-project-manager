@@ -5,7 +5,6 @@ import {
     Box, Grid, TextField, Select, MenuItem, FormControl, InputLabel,
     FormHelperText, Typography, Autocomplete, CircularProgress, useTheme, Chip
 } from '@mui/material';
-import ReactQuill from 'react-quill-new'; // O el editor que estés usando
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFnsV2"; 
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -13,6 +12,7 @@ import es from 'date-fns/locale/es';
 
 import { TaskFormValues } from '../schemas/tagFormSchema';
 import { FormOptionsResponse, UserOption, EstadoTarea, PrioridadTarea } from '../types';
+import TiptapEditor from './TiptapEditor'; // <-- AÑADIR IMPORT DE TIPTAPEDITOR
 
 // Copia o mueve quillModules y quillFormats aquí o a un archivo de utilidades
 const quillModules  = {
@@ -91,7 +91,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isSubmitting, lookupOptions }) => {
                     />
                 </Grid>
 
-                {/* Descripción (ReactQuill) */}
+                {/* Descripción (con TiptapEditor) */}
                 <Grid item xs={12}>
                     <FormControl fullWidth error={!!errors.descripcion} disabled={isSubmitting}>
                         <Typography variant="subtitle2" sx={{ mb: 0.5, color: errors.descripcion ? theme.palette.error.main : 'text.secondary' }}>
@@ -101,22 +101,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ isSubmitting, lookupOptions }) => {
                             name="descripcion"
                             control={control}
                             render={({ field }) => (
-                                <ReactQuill
-                                    theme="snow"
-                                    value={field.value || ''}
-                                    onChange={(content, delta, source, editor) => {
-                                        const htmlContent = editor.getHTML();
-                                        const textContent = editor.getText().trim();
-                                        field.onChange(textContent ? htmlContent : null);
-                                    }}
-                                    modules={quillModules}
-                                    formats={quillFormats}
+                                <TiptapEditor
+                                    value={field.value} // TiptapEditor maneja null/undefined
+                                    onChange={field.onChange} // TiptapEditor ya devuelve null si está vacío
                                     placeholder="Detalles de la tarea..."
-                                    style={{ 
-                                        backgroundColor: isSubmitting ? theme.palette.action.disabledBackground : 'transparent',
-                                        minHeight: '150px', display: 'flex', flexDirection: 'column' 
-                                    }}
-                                    readOnly={isSubmitting}
+                                    disabled={isSubmitting}
                                 />
                             )}
                         />

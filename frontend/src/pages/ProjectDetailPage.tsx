@@ -311,7 +311,7 @@ function ProjectDetailPage() {
 
             <Grid container spacing={3}>
                  {isAuthenticated && (
-                    <Grid item xs={12} md={project.descripcion && lookupOptions ? 8 : 12}> {/* Ajuste para que ocupe más si descripción no está, o lookups no cargaron para el modal de chat */}
+                    <Grid item xs={12} md={project.descripcion && lookupOptions ? 12 : 12}> {/* Ajuste para que ocupe más si descripción no está, o lookups no cargaron para el modal de chat */}
                         <SectionPaper elevation={2}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                 <Typography variant="h6" gutterBottom component="div">Bitácora de Tareas</Typography>
@@ -330,7 +330,7 @@ function ProjectDetailPage() {
                  )}
                  {/* Columna para Chat/Detalle o Descripción si no hay Bitácora visible */}
                  {(isAuthenticated && project.descripcion && lookupOptions) ? ( // Si está autenticado Y hay descripción Y hay lookups (para el chat)
-                    <Grid item xs={12} md={4}>
+                    <Grid item xs={12} md={12}>
                         <SectionPaper elevation={2}>
                             <Typography variant="h6" gutterBottom>Descripción del Proyecto</Typography>
                             <Divider sx={{ mb: 2 }} />

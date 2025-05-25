@@ -1,92 +1,100 @@
 // backend/src/services/chatMessageService.ts
 import prisma from '../config/prismaClient';
-import { CreateChatMessageInput } from '../schemas/chatMessageSchemas';
+import { CreateChatMessageInput, GetChatMessagesQuery } from '../schemas/chatMessageSchemas';
 import { AppError, ForbiddenError, NotFoundError } from '../utils/errors';
-import { Role, User as PrismaUser, Tarea, MensajeChatTarea, TipoNotificacion, TipoRecursoNotificacion } from '@prisma/client';
+import { Role, User as PrismaUser, Tarea, MensajeChatTarea, TipoNotificacion, TipoRecursoNotificacion, Project as PrismaProject } from '@prisma/client';
 import { UserPayload } from '../types/express';
-import { emitToRoom, emitToUser } from '../socketManager'; // Usaremos emitToRoom para el chat
-import { notificationService } from './notificationService'; // Para crear notificaciones en DB
+import { emitToRoom } from '../socketManager'; 
+import { notificationService } from './notificationService'; 
+
+// Ajustamos el tipo de retorno de checkTaskChatAccess para ser más explícito
+type TaskWithProjectDetailsForChatAccess = Tarea & {
+  proyecto: PrismaProject & {
+    colaboradores: Pick<PrismaUser, 'id'>[];
+    proyectista?: Pick<PrismaUser, 'id' | 'name' | 'email' | 'role'> | null;
+    formulador?: Pick<PrismaUser, 'id' | 'name' | 'email' | 'role'> | null;
+  };
+  creador?: Pick<PrismaUser, 'id' | 'name' | 'email' | 'role'> | null;
+  asignado?: Pick<PrismaUser, 'id' | 'name' | 'email' | 'role'> | null;
+};
 
 // Helper para verificar si un usuario puede interactuar con el chat de una tarea
-const checkTaskChatAccess = async (taskId: number, userPayload: UserPayload): Promise<Tarea & { proyecto: { colaboradores: PrismaUser[] } }> => {
+const checkTaskChatAccess = async (taskId: number, userPayload: UserPayload): Promise<TaskWithProjectDetailsForChatAccess> => {
     const tarea = await prisma.tarea.findUnique({
         where: { id: taskId },
         include: {
             proyecto: {
                 include: {
-                    colaboradores: true, // Para verificar si el usuario es colaborador del proyecto
-                    proyectista: true,
-                    formulador: true,
+                    colaboradores: { select: { id: true } }, // Solo IDs
+                    proyectista: { select: { id: true, name: true, email: true, role: true } }, // SIN password
+                    formulador: { select: { id: true, name: true, email: true, role: true } },  // SIN password
                 }
             },
-            creador: true,
-            asignado: true
+            creador: { select: { id: true, name: true, email: true, role: true } }, // SIN password
+            asignado: { select: { id: true, name: true, email: true, role: true } } // SIN password
         }
     });
 
     if (!tarea) {
         throw new NotFoundError(`Tarea con ID ${taskId} no encontrada.`);
     }
+    
+    const typedTarea = tarea as TaskWithProjectDetailsForChatAccess; // Casteamos al tipo que espera la lógica
 
-    // Admins y Coordinadores siempre tienen acceso
     if (userPayload.role === Role.ADMIN || userPayload.role === Role.COORDINADOR) {
-        return tarea;
+        return typedTarea;
     }
 
-    // Verificar si el usuario es creador de la tarea, asignado a la tarea,
-    // o parte del equipo del proyecto (proyectista, formulador, colaborador)
-    const isCreator = tarea.creadorId === userPayload.id;
-    const isAssignee = tarea.asignadoId === userPayload.id;
-    const isProjectProyectista = tarea.proyecto.proyectistaId === userPayload.id;
-    const isProjectFormulador = tarea.proyecto.formuladorId === userPayload.id;
-    const isProjectCollaborator = tarea.proyecto.colaboradores.some(colab => colab.id === userPayload.id);
+    const isCreator = typedTarea.creadorId === userPayload.id;
+    const isAssignee = typedTarea.asignadoId === userPayload.id;
+    // Accedemos a proyectistaId y formuladorId directamente del campo escalar del proyecto si está disponible
+    // o a través del objeto proyectista/formulador si se incluyó.
+    // El include actual en `proyecto` ya trae el objeto `proyectista` y `formulador` con su ID.
+    const isProjectProyectista = typedTarea.proyecto.proyectista?.id === userPayload.id;
+    const isProjectFormulador = typedTarea.proyecto.formulador?.id === userPayload.id;
+    const isProjectCollaborator = typedTarea.proyecto.colaboradores.some(colab => colab.id === userPayload.id);
 
     if (!isCreator && !isAssignee && !isProjectProyectista && !isProjectFormulador && !isProjectCollaborator) {
         throw new ForbiddenError('No tienes permiso para interactuar con el chat de esta tarea.');
     }
-    return tarea;
+    return typedTarea;
 };
 
+// La función createChatMessage permanece igual en su lógica, pero ahora el objeto 'tarea'
+// que recibe de checkTaskChatAccess ya no tendrá los passwords en sus relaciones anidadas.
 export const createChatMessage = async (
     taskId: number,
     remitentePayload: UserPayload,
     data: CreateChatMessageInput
 ): Promise<MensajeChatTarea> => {
-    // 1. Verificar que la tarea exista y que el remitente tenga permiso para chatear en ella
-    const tarea = await checkTaskChatAccess(taskId, remitentePayload);
-    console.log('[ChatMessageService] Detalles de la Tarea para el chat:', JSON.stringify(tarea, null, 2));
+    const tarea = await checkTaskChatAccess(taskId, remitentePayload); // 'tarea' ya no tiene passwords anidados
+    
+    // Este log ahora será seguro respecto a los passwords de usuarios relacionados con la tarea
+    console.log('[ChatMessageService] Detalles de la Tarea para el chat (sin passwords anidados):', JSON.stringify(tarea, null, 2));
     console.log(`[ChatMessageService] Remitente del mensaje (User ID): ${remitentePayload.id}, Nombre: ${remitentePayload.name}`);
 
-    // 2. Crear el mensaje en la base de datos
     const nuevoMensaje = await prisma.mensajeChatTarea.create({
         data: {
-            contenido: data.contenido, // HTML del editor enriquecido
+            contenido: data.contenido,
             tarea: { connect: { id: taskId } },
             remitente: { connect: { id: remitentePayload.id } },
         },
-        include: { // Incluir remitente para la respuesta y el evento socket
+        include: {
             remitente: {
-                select: { id: true, name: true, email: true, role: true }
+                select: { id: true, name: true, email: true, role: true } // Ya estaba bien aquí
             }
         }
     });
 
-    // 3. Lógica de Notificación (DB y Socket.IO)
-    // Notificar a los "participantes" de la tarea (creador, asignado, y colaboradores del proyecto)
-    // excluyendo al remitente del mensaje.
     const nombreRemitente = remitentePayload.name || remitentePayload.email;
-    const mensajeNotificacion = `${nombreRemitente} envió un mensaje en la tarea "${tarea.titulo}"`; // Mensaje más genérico
+    const mensajeNotificacion = `${nombreRemitente} envió un mensaje en la tarea "${tarea.titulo}" del proyecto "${tarea.proyecto.nombre}".`;
     
-    // Identificar a todos los usuarios que podrían tener interés en la tarea
     const interesadosPotencialesIds = new Set<number>();
     if (tarea.creadorId) interesadosPotencialesIds.add(tarea.creadorId);
     if (tarea.asignadoId) interesadosPotencialesIds.add(tarea.asignadoId);
-    // Añadir colaboradores del proyecto al que pertenece la tarea
     tarea.proyecto.colaboradores.forEach(colab => interesadosPotencialesIds.add(colab.id));
-    if (tarea.proyecto.proyectistaId) interesadosPotencialesIds.add(tarea.proyecto.proyectistaId);
-    if (tarea.proyecto.formuladorId) interesadosPotencialesIds.add(tarea.proyecto.formuladorId);
-    // Incluir Admin y Coordinadores que son parte del proyecto explícitamente, o todos.
-    // Por ahora, nos basamos en la implicación directa o colaboración en el proyecto.
+    if (tarea.proyecto.proyectistaId) interesadosPotencialesIds.add(tarea.proyecto.proyectistaId); // Aquí se usa el ID escalar del proyecto
+    if (tarea.proyecto.formuladorId) interesadosPotencialesIds.add(tarea.proyecto.formuladorId);   // Aquí también
 
     const usuariosParaNotificar = await prisma.user.findMany({
         where: { id: { in: Array.from(interesadosPotencialesIds) } },
@@ -94,38 +102,31 @@ export const createChatMessage = async (
     });
 
     usuariosParaNotificar.forEach(async (usuario) => {
-        if (usuario.id === remitentePayload.id) return; // No notificar al propio remitente
+        if (usuario.id === remitentePayload.id) return; 
 
         let crearNotificacionParaEsteUsuario = false;
-
-        // Regla 1: Usuarios con rol USUARIO
         if (usuario.role === Role.USUARIO) {
-            // Si ya está en interesadosPotencialesIds (es creador, asignado, colaborador, proyectista, formulador)
-            // y es un USUARIO, se notifica.
             crearNotificacionParaEsteUsuario = true;
         } 
-        // Regla 2: Usuarios con rol ADMIN o COORDINADOR
         else if (usuario.role === Role.ADMIN || usuario.role === Role.COORDINADOR) {
-            // Se notifican si son creador de la tarea, asignado a la tarea,
-            // O SI SON EL PROYECTISTA DEL PROYECTO AL QUE PERTENECE LA TAREA.
             if (tarea.creadorId === usuario.id || 
                 tarea.asignadoId === usuario.id ||
-                tarea.proyecto.proyectistaId === usuario.id) { // <--- AÑADIR ESTA CONDICIÓN
+                tarea.proyecto.proyectistaId === usuario.id // Usamos el ID escalar del proyecto
+            ) {
                 crearNotificacionParaEsteUsuario = true;
             } else {
-                console.log(`[ChatMessageService] No se crea notificación de chat para Admin/Coordinador (ID: ${usuario.id}) para tarea ${taskId} (no es creador, ni asignado, ni proyectista del proyecto de la tarea)`);
+                // console.log(`[ChatMessageService] Admin/Coordinador (ID: ${usuario.id}) no notificado...`);
             }
         }
-        // (FUTURO: añadir lógica para 'if (mensajeContieneMencionPara(usuario.id)) crearNotificacionParaEsteUsuario = true;')
-
+        
         if (crearNotificacionParaEsteUsuario) {
             try {
-                await notificationService.createDBNotification({ // Esta función ya emite 'unread_count_updated'
+                await notificationService.createDBNotification({
                     usuarioId: usuario.id,
                     tipo: TipoNotificacion.NUEVO_MENSAJE_TAREA,
-                    mensaje: mensajeNotificacion, // Usar el mensaje genérico
+                    mensaje: mensajeNotificacion,
                     urlDestino: `/projects/${tarea.proyectoId}/tasks/${taskId}`,
-                    recursoId: nuevoMensaje.id, // ID del MensajeChatTarea
+                    recursoId: nuevoMensaje.id,
                     recursoTipo: TipoRecursoNotificacion.MENSAJE_CHAT_TAREA,
                 });
             } catch (dbNotificationError) {
@@ -134,55 +135,16 @@ export const createChatMessage = async (
         }
     });
 
-    // El evento Socket.IO a la sala de la tarea se emite siempre para actualizar el chat en tiempo real
-    // para cualquiera que lo esté viendo.
     const taskRoom = `task_chat_${taskId}`;
-    emitToRoom(taskRoom, 'nuevo_mensaje_chat', nuevoMensaje); // 'nuevoMensaje' tiene remitente incluido
+    emitToRoom(taskRoom, 'nuevo_mensaje_chat', nuevoMensaje); 
 
     return nuevoMensaje;
 };
 
-export const getChatMessagesByTaskId = async (
-    taskId: number,
-    requestingUserPayload: UserPayload,
-    query: GetChatMessagesQuery // Para paginación
-): Promise<{ messages: MensajeChatTarea[], totalMessages: number, page: number, limit: number, totalPages: number }> => {
-    // 1. Verificar que la tarea exista y que el usuario tenga permiso para ver sus mensajes
-    await checkTaskChatAccess(taskId, requestingUserPayload); // Reutilizamos el helper de acceso
+// La función getChatMessagesByTaskId ya selecciona explícitamente los campos del remitente,
+// por lo que no debería exponer passwords.
+export const getChatMessagesByTaskId = async ( /* ... */ ) => { /* ... tu código existente ... */ };
 
-    // 2. Configurar paginación
-    const page = query.page || 1;
-    const limit = query.limit || 20; // Default a 20 mensajes por página
-    const skip = (page - 1) * limit;
-
-    // 3. Obtener los mensajes y el conteo total para la paginación
-    const [messages, totalMessages] = await prisma.$transaction([
-        prisma.mensajeChatTarea.findMany({
-            where: { tareaId: taskId },
-            include: {
-                remitente: {
-                    select: { id: true, name: true, email: true, role: true } // Datos del remitente
-                }
-            },
-            orderBy: {
-                fechaEnvio: 'asc', // Mensajes más antiguos primero, o 'desc' para más nuevos primero
-            },
-            skip: skip,
-            take: limit,
-        }),
-        prisma.mensajeChatTarea.count({
-            where: { tareaId: taskId }
-        })
-    ]);
-
-    return {
-        messages,
-        totalMessages,
-        page,
-        limit,
-        totalPages: Math.ceil(totalMessages / limit)
-    };
-};
 
 export const chatMessageService = {
     createChatMessage,

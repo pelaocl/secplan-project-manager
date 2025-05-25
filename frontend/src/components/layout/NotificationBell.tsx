@@ -57,20 +57,22 @@ const NotificationBell: React.FC = () => {
     if (!isAuthenticated || !socketService.getSocket() || !currentUserId) return;
 
     const handleUnreadCountUpdate = (data: { count: number }) => {
-        console.log('[NotificationBell] Evento unread_count_updated recibido:', data);
-        setUnreadCount(data.count);
+      console.log(`[NotificationBell - STEP 6] Evento Socket 'unread_count_updated' recibido. Data:`, data);
+      setUnreadCount(data.count);
         // Si el menú está abierto cuando llega una actualización de contador,
         // podrías querer refrescar la lista visible en el dropdown.
         if (anchorEl) {
+            console.log("[NotificationBell] Menú de notificaciones estaba abierto, refrescando su contenido.");
             fetchDropdownNotifications();
         }
     };
-    
+    console.log("[NotificationBell] Registrando listener para 'unread_count_updated'");
     socketService.on('unread_count_updated', handleUnreadCountUpdate);
 
     return () => {
         const socket = socketService.getSocket();
         if (socket) {
+            console.log("[NotificationBell] Desregistrando listener para 'unread_count_updated'");
             socket.off('unread_count_updated', handleUnreadCountUpdate);
         }
     };

@@ -10,7 +10,9 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import LoginPage from '../pages/LoginPage';
 import ProjectListPage from '../pages/ProjectListPage'; 
 const ProjectDetailPage = lazy(() => import('../pages/ProjectDetailPage'));
-import ProjectCreatePage from '../pages/ProjectCreatePage';
+//import ProjectCreatePage from '../pages/ProjectCreatePage';
+import ProjectCreatePageWithMinimalChild  from '../pages/ProjectCreatePage'; // Importa la versión simplificada (si la dejaste en el mismo archivo)
+
 import ProjectEditPage from '../pages/ProjectEditPage';
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
 const AdminUsersPage = lazy(() => import('../pages/AdminUsersPage'));
@@ -72,7 +74,8 @@ function AppRoutes() {
                     element={
                         <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.COORDINADOR]}>
                              <ErrorBoundary fallbackMessage="Error al cargar el formulario de creación.">
-                                <ProjectCreatePage />
+                                {/* <ProjectCreatePage /> // Original Comentado */}
+                                <ProjectCreatePageWithMinimalChild  /> {/* Usar la versión simplificada */}
                             </ErrorBoundary>
                         </ProtectedRoute>
                     }
