@@ -286,7 +286,7 @@ function ProjectDetailPage() {
                  
                  {/* --- SECCIÓN DE BITÁCORA DE TAREAS (ACTUALIZADA) --- */}
                  {isAuthenticated && (
-                    <Grid item xs={12} md={8}> {/* Ajusta md={12} si quieres que ocupe todo el ancho inicialmente */}
+                    <Grid item xs={12} md={12}>
                         <SectionPaper elevation={2}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                 <Typography variant="h6" gutterBottom component="div">
@@ -334,21 +334,7 @@ function ProjectDetailPage() {
                  {/* --- FIN SECCIÓN DE BITÁCORA DE TAREAS --- */}
 
                  {/* Placeholder para columna de detalles de tarea/chat */}
-                 {isAuthenticated && (
-                     <Grid item xs={12} md={4}>
-                        {/* Este espacio podría usarse para mostrar el detalle de una tarea seleccionada o el chat */}
-                        {/* Ejemplo:
-                        <SectionPaper> 
-                            <Typography variant="h6" gutterBottom>Detalles / Chat</Typography>
-                            <Divider sx={{ mb: 2 }} />
-                            <Typography variant="body2" color="text.secondary">(Seleccione una tarea)</Typography>
-                        </SectionPaper> 
-                        */}
-                     </Grid>
-                 )}
                  
-                {/* ... (Tus otras secciones: Información Básica, Descripción, etc., SIN CAMBIOS) ... */}
-                {/* Asegúrate que la sección de descripción (4) esté usando dangerouslySetInnerHTML */}
                 <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Información Básica</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={BusinessIcon} label="Unidad Municipal" value={project.unidad?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CategoryIcon} label="Tipología" value={project.tipologia?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={InfoOutlinedIcon} label="Estado Actual" value={project.estado?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CalendarTodayIcon} label="Año Iniciativa" value={project.ano?.toString()} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Línea Financ." value={project.lineaFinanciamiento?.nombre} /> </Grid> <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Ref. (${project.tipoMoneda})`} value={formatCurrency(project.monto, project.tipoMoneda)} /> </Grid> {isAuthenticated && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Proyectista" value={project.proyectista ? `${project.proyectista.name || '?'} (${project.proyectista.email})` : null} /> </Grid>} {isAuthenticated && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Formulador" value={project.formulador ? `${project.formulador.name || '?'} (${project.formulador.email})` : null} /> </Grid>} {isAuthenticated && project.colaboradores && project.colaboradores.length > 0 && ( <Grid item xs={12} md={4}> <IconDetailItem icon={GroupsIcon} label="Nº Colaboradores" value={project.colaboradores.length.toString()} /> </Grid> )} </Grid> </SectionPaper> </Grid>
                 {project.descripcion && ( <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Descripción del Proyecto</Typography> <Divider sx={{ mb: 2 }} /> <Box className="quill-content-display" sx={{ lineHeight: 1.5, '& h1': { my: theme.spacing(2), fontSize: '1.75rem', fontWeight: 'bold' }, '& h2': { my: theme.spacing(1.5), fontSize: '1.5rem', fontWeight: 'bold' }, '& h3': { my: theme.spacing(1), fontSize: '1.25rem', fontWeight: 'bold' }, '& p': { mb: theme.spacing(1) }, '& ul, & ol': { pl: theme.spacing(3), mb: theme.spacing(1) }, '& a': { color: theme.palette.primary.main, textDecoration: 'underline' }, '& img': { maxWidth: '100%', height: 'auto', my: theme.spacing(1), borderRadius: theme.shape.borderRadius, display: 'block', }, }} dangerouslySetInnerHTML={{ __html: project.descripcion }} /> </SectionPaper> </Grid> )}
                 <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Ubicación y Superficies</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> <Grid item xs={12} md={6}> <IconDetailItem icon={TravelExploreIcon} label="Sector" value={project.sector?.nombre} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Terreno (m²)" value={project.superficieTerreno?.toLocaleString('es-CL')} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Edificación (m²)" value={project.superficieEdificacion?.toLocaleString('es-CL')} /> </Grid> <Grid item xs={12} md={6}> <IconDetailItem icon={LocationOnIcon} label="Dirección" value={project.direccion} /> </Grid> </Grid> </SectionPaper> </Grid>

@@ -118,21 +118,73 @@ export const createTask = async (
 export const getTasksByProjectId = async (
     projectId: number,
     requestingUserPayload: UserPayload
-): Promise<Task[]> => {
+): Promise<(Task & { tieneNotificacionesChatNoLeidasParaUsuarioActual?: boolean })[]> => {
+    // 1. Verificar acceso al proyecto
     await checkProjectAccess(projectId, requestingUserPayload);
     
-    return prisma.tarea.findMany({
+    // 2. Obtener las tareas del proyecto
+    const tasksFromDb = await prisma.tarea.findMany({
         where: { proyectoId: projectId },
         include: {
             creador: { select: { id: true, name: true, email: true, role: true } },
             asignado: { select: { id: true, name: true, email: true, role: true } },
-            // Si necesitas el nombre del proyecto aquí también, puedes añadir:
-            // proyecto: { select: { id: true, nombre: true } }
         },
         orderBy: {
             fechaCreacion: 'desc',
         },
     });
+
+    if (tasksFromDb.length === 0) {
+        return [];
+    }
+
+    // 3. Obtener todas las notificaciones de chat NO LEÍDAS para el usuario actual
+    const unreadUserChatNotifications = await prisma.notificacion.findMany({
+        where: {
+            usuarioId: requestingUserPayload.id,
+            leida: false,
+            tipo: TipoNotificacion.NUEVO_MENSAJE_TAREA,
+            recursoTipo: TipoRecursoNotificacion.MENSAJE_CHAT_TAREA, // Importante: que sea de tipo mensaje de chat
+            recursoId: { not: null } // Asegura que recursoId (que es mensajeId) exista
+        },
+        select: {
+            recursoId: true // Esto es el ID del MensajeChatTarea
+        }
+    });
+
+    // Si no hay notificaciones de chat no leídas para el usuario, ninguna tarea tendrá el flag
+    if (unreadUserChatNotifications.length === 0) {
+        return tasksFromDb.map(task => ({ 
+            ...task, 
+            tieneNotificacionesChatNoLeidasParaUsuarioActual: false 
+        }));
+    }
+
+    // 4. Obtener los IDs de los mensajes que tienen notificaciones no leídas
+    const unreadMessageIds = unreadUserChatNotifications.map(n => n.recursoId as number);
+
+    // 5. Descubrir a qué tareas pertenecen esos mensajes no leídos
+    //    y que esas tareas sean parte del proyecto actual que estamos listando.
+    const messagesInProjectTasks = await prisma.mensajeChatTarea.findMany({
+        where: {
+            id: { in: unreadMessageIds },      // El mensaje es uno de los que tiene notificación no leída
+            tareaId: { in: tasksFromDb.map(t => t.id) } // Y el mensaje pertenece a una de las tareas de este proyecto
+        },
+        select: {
+            tareaId: true // Solo necesitamos el tareaId para marcar
+        },
+        distinct: ['tareaId'] // Obtenemos cada tareaId solo una vez
+    });
+
+    const unreadTaskIds = new Set(messagesInProjectTasks.map(m => m.tareaId));
+
+    // 6. Mapear sobre las tareas originales y añadir el nuevo flag
+    const tasksWithUnreadFlag = tasksFromDb.map(task => ({
+        ...task,
+        tieneNotificacionesChatNoLeidasParaUsuarioActual: unreadTaskIds.has(task.id)
+    }));
+
+    return tasksWithUnreadFlag;
 };
 
 export const getTaskById = async (

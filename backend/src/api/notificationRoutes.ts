@@ -3,6 +3,7 @@ import express from 'express';
 import { authenticateToken } from '../middlewares/authMiddleware';
 import { validateRequest } from '../middlewares/validationMiddleware';
 import { notificationIdParamSchema, getNotificationsQuerySchema } from '../schemas/notificationSchemas';
+import { taskIdParamSchema } from '../schemas/taskSchemas'; // <-- IMPORTAR taskIdParamSchema
 import * as notificationController from '../controllers/notificationController';
 
 const router = express.Router();
@@ -31,6 +32,16 @@ router.put(
     authenticateToken,
     validateRequest({ params: notificationIdParamSchema }),
     notificationController.markAsReadHandler
+);
+
+// --- NUEVA RUTA ---
+// Marcar todas las notificaciones de chat de una tarea específica como leídas
+// PUT /api/notifications/task-chat/:taskId/read-all
+router.put(
+    '/task-chat/:taskId/read-all',
+    authenticateToken,
+    validateRequest({ params: taskIdParamSchema }), // Valida que :taskId sea un número
+    notificationController.markTaskChatAsReadHandler
 );
 
 export default router;

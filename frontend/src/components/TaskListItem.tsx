@@ -1,8 +1,9 @@
 // frontend/src/components/TaskListItem.tsx
 import React from 'react';
-import { ListItem, ListItemText, Typography, Chip, Paper, Box, IconButton, Tooltip } from '@mui/material';
+import { ListItem, ListItemText, Typography, Chip, Paper, Box, IconButton, Tooltip, useTheme, Badge } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit'; // Para un futuro botón de editar
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'; // Para indicar chat o ver chat
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'; // Ícono para el punto indicador
 import { Task, EstadoTarea, PrioridadTarea } from '../types'; // Asegúrate que estos tipos y enums estén en ../types
 
 interface TaskListItemProps {
@@ -33,6 +34,7 @@ export const getPrioridadTareaColor = (prioridad?: PrioridadTarea): "default" | 
 };
 
 const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails /*, onEdit */ }) => {
+  const theme = useTheme(); // Para acceder a los colores del tema
   const handleViewClick = () => {
     onViewDetails(task.id);
   };
@@ -60,9 +62,11 @@ const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails /*, onE
       <ListItem alignItems="flex-start" sx={{ py: 1.5, px: 2 }}>
         <ListItemText
           primary={
-            <Typography variant="h6" component="div" noWrap sx={{ mb: 0.5, fontWeight: 500 }}>
-                {task.titulo}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography variant="h6" component="div" noWrap sx={{ mb: 0.5, fontWeight: 500 }}>
+                  {task.titulo}
+              </Typography>
+            </Box>
           }
 
           secondaryTypographyProps={{ component: 'div' }} // Indica a MUI que el contenedor del 'secondary' sea un div
@@ -91,14 +95,26 @@ const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails /*, onE
           }
         />
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 1 }}>
-           {/* <Tooltip title="Editar Tarea">
-                <IconButton size="small" onClick={handleEditClick} aria-label={`Editar tarea ${task.titulo}`}>
-                    <EditIcon fontSize="small" />
-                </IconButton>
-            </Tooltip> */}
-            <Tooltip title="Ver Chat / Detalles">
-                 <IconButton size="small" onClick={handleViewClick} aria-label={`Ver chat de tarea ${task.titulo}`}>
-                    <ChatBubbleOutlineIcon fontSize="small" />
+            <Tooltip title={task.tieneNotificacionesChatNoLeidasParaUsuarioActual ? "Ver Chat (Nuevos mensajes)" : "Ver Chat / Detalles"}>
+                 <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleViewClick(); }} aria-label={`Ver chat de tarea ${task.titulo}`}> {/* Detener propagación para que onClick del Paper no se llame dos veces si el Paper también tiene onClick */}
+                    {/* --- INDICADOR DE CHAT NO LEÍDO CON BADGE --- */}
+                    <Badge 
+                        color="error" 
+                        variant="dot" 
+                        invisible={!task.tieneNotificacionesChatNoLeidasParaUsuarioActual}
+                        sx={{
+                            '& .MuiBadge-dot': { // Estilos para el punto del badge
+                                minWidth: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                // Podrías ajustar la posición del badge si es necesario
+                                // transform: 'scale(1) translate(50%, -50%)', 
+                            }
+                        }}
+                    >
+                        <ChatBubbleOutlineIcon fontSize="small" />
+                    </Badge>
+
                 </IconButton>
             </Tooltip>
         </Box>

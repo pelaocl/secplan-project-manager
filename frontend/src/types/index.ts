@@ -158,6 +158,8 @@ export interface Task {
     codigoUnico: string;
   };
   mensajes?: ChatMessage[]; // Array de mensajes, se cargará en getTaskById
+
+  tieneNotificacionesChatNoLeidasParaUsuarioActual?: boolean;
 }
 
 // --- Tipos para los Inputs de Formularios de Tareas (Frontend) ---

@@ -73,47 +73,69 @@ export const createChatMessage = async (
     // Notificar a los "participantes" de la tarea (creador, asignado, y colaboradores del proyecto)
     // excluyendo al remitente del mensaje.
     const nombreRemitente = remitentePayload.name || remitentePayload.email;
-    const mensajeNotificacion = `${nombreRemitente} ha enviado un nuevo mensaje en la tarea "${tarea.titulo}" del proyecto "${tarea.proyecto.nombre}".`;
+    const mensajeNotificacion = `${nombreRemitente} envió un mensaje en la tarea "${tarea.titulo}"`; // Mensaje más genérico
     
-    const participantesIds = new Set<number>();
-    if (tarea.creadorId) participantesIds.add(tarea.creadorId);
-    if (tarea.asignadoId) participantesIds.add(tarea.asignadoId);
-    tarea.proyecto.colaboradores.forEach(colab => participantesIds.add(colab.id));
-    if (tarea.proyecto.proyectistaId) participantesIds.add(tarea.proyecto.proyectistaId);
-    if (tarea.proyecto.formuladorId) participantesIds.add(tarea.proyecto.formuladorId);
+    // Identificar a todos los usuarios que podrían tener interés en la tarea
+    const interesadosPotencialesIds = new Set<number>();
+    if (tarea.creadorId) interesadosPotencialesIds.add(tarea.creadorId);
+    if (tarea.asignadoId) interesadosPotencialesIds.add(tarea.asignadoId);
+    // Añadir colaboradores del proyecto al que pertenece la tarea
+    tarea.proyecto.colaboradores.forEach(colab => interesadosPotencialesIds.add(colab.id));
+    if (tarea.proyecto.proyectistaId) interesadosPotencialesIds.add(tarea.proyecto.proyectistaId);
+    if (tarea.proyecto.formuladorId) interesadosPotencialesIds.add(tarea.proyecto.formuladorId);
+    // Incluir Admin y Coordinadores que son parte del proyecto explícitamente, o todos.
+    // Por ahora, nos basamos en la implicación directa o colaboración en el proyecto.
 
+    const usuariosParaNotificar = await prisma.user.findMany({
+        where: { id: { in: Array.from(interesadosPotencialesIds) } },
+        select: { id: true, role: true }
+    });
 
-    participantesIds.forEach(async (usuarioId) => {
-        if (usuarioId !== remitentePayload.id) { // No notificar al propio remitente
+    usuariosParaNotificar.forEach(async (usuario) => {
+        if (usuario.id === remitentePayload.id) return; // No notificar al propio remitente
+
+        let crearNotificacionParaEsteUsuario = false;
+
+        // Regla 1: Los usuarios con rol USUARIO (proyectistas, miembros del equipo)
+        // que son creador, asignado, o colaborador del proyecto reciben notificación de chat.
+        if (usuario.role === Role.USUARIO) {
+            crearNotificacionParaEsteUsuario = true;
+        } 
+        // Regla 2: ADMIN y COORDINADOR solo reciben notificación de este chat si son
+        // el creador de la tarea o el asignado a la tarea.
+        // (En el futuro, también si son @mencionados).
+        else if (usuario.role === Role.ADMIN || usuario.role === Role.COORDINADOR) {
+            if (tarea.creadorId === usuario.id || tarea.asignadoId === usuario.id) {
+                crearNotificacionParaEsteUsuario = true;
+            } else {
+                // Para Admin/Coordinador no directamente involucrados en esta tarea específica,
+                // no creamos una notificación de BD (y por ende no afectamos su campana global).
+                // Ellos verán el indicador en la lista de tareas si entran al proyecto.
+                console.log(`[ChatMessageService] No se crea notificación de chat para Admin/Coordinador (ID: ${usuario.id}) para tarea ${taskId} (no es creador ni asignado)`);
+            }
+        }
+        // (FUTURO: añadir lógica para 'if (mensajeContieneMencionPara(usuario.id)) crearNotificacionParaEsteUsuario = true;')
+
+        if (crearNotificacionParaEsteUsuario) {
             try {
-                await notificationService.createDBNotification({
-                    usuarioId: usuarioId,
+                await notificationService.createDBNotification({ // Esta función ya emite 'unread_count_updated'
+                    usuarioId: usuario.id,
                     tipo: TipoNotificacion.NUEVO_MENSAJE_TAREA,
-                    mensaje: mensajeNotificacion,
-                    urlDestino: `/projects/${tarea.proyectoId}/tasks/${taskId}`, // Lleva al detalle de la tarea
-                    recursoId: nuevoMensaje.id, // ID del mensaje de chat
+                    mensaje: mensajeNotificacion, // Usar el mensaje genérico
+                    urlDestino: `/projects/${tarea.proyectoId}/tasks/${taskId}`,
+                    recursoId: nuevoMensaje.id, // ID del MensajeChatTarea
                     recursoTipo: TipoRecursoNotificacion.MENSAJE_CHAT_TAREA,
                 });
-                // La notificación por socket para nuevo mensaje se emitirá a la sala de la tarea
             } catch (dbNotificationError) {
-                console.error(`[ChatMessageService] Error creando notificación de chat en DB para usuario ${usuarioId}:`, dbNotificationError);
+                console.error(`[ChatMessageService] Error creando notificación de chat en DB para usuario ${usuario.id}:`, dbNotificationError);
             }
         }
     });
 
-    // Emitir evento Socket.IO a una "sala" específica de la tarea para que todos los
-    // clientes suscritos a esa tarea reciban el mensaje en tiempo real.
+    // El evento Socket.IO a la sala de la tarea se emite siempre para actualizar el chat en tiempo real
+    // para cualquiera que lo esté viendo.
     const taskRoom = `task_chat_${taskId}`;
-    emitToRoom(taskRoom, 'nuevo_mensaje_chat', nuevoMensaje);
-    // También podrías emitir un evento 'nueva_notificacion_generica' a los usuarios individuales
-    // para que actualicen su contador de notificaciones, si el evento de sala no lo hace.
-    // Ejemplo:
-    // participantesIds.forEach(usuarioId => {
-    //   if (usuarioId !== remitentePayload.id) {
-    //     emitToUser(usuarioId.toString(), 'notificacion_global_actualizada', { count: numero_de_sus_notificaciones_no_leidas });
-    //   }
-    // });
-
+    emitToRoom(taskRoom, 'nuevo_mensaje_chat', nuevoMensaje); // 'nuevoMensaje' tiene remitente incluido
 
     return nuevoMensaje;
 };

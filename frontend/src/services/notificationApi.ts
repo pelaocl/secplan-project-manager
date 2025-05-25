@@ -43,8 +43,21 @@ async function markAllAsRead(): Promise<{ message: string; count: number }> { //
     }
 }
 
+async function markTaskChatNotificationsAsRead(taskId: number): Promise<{ message: string; count: number }> {
+    try {
+        // La ruta debe coincidir con la que definiste en notificationRoutes.ts en el backend
+        const response = await apiService.put<{ message: string; count: number }>(`/notifications/task-chat/${taskId}/read-all`, {});
+        console.log(`[notificationApi] Marcadas como leídas notificaciones de chat para tarea ${taskId}, actualizadas: ${response.count}`);
+        return response;
+    } catch (error) {
+        console.error(`[notificationApi] Error marcando notificaciones de chat para tarea ${taskId} como leídas:`, error);
+        throw error;
+    }
+}
+
 export const notificationApi = {
     getNotifications,
     markAsRead,
     markAllAsRead,
+    markTaskChatNotificationsAsRead,
 };

@@ -8,8 +8,10 @@ import DOMPurify from 'dompurify';
 import { ChatMessage, Task, User, UserPayload } from '../types';
 import { useCurrentUser } from '../store/authStore';
 import ChatMessageItem from './ChatMessageItem';
-import { chatMessageService } from '../services/chatMessageApi'; // Necesitaremos crear este servicio
+import { chatMessageService } from '../services/chatMessageApi';
 import { socketService } from '../services/socketService';
+import { notificationApi } from '../services/notificationApi';
+
 
 // Configuración de Quill para el chat (puede ser más simple que para descripciones)
 const chatQuillModules  = {
@@ -79,6 +81,23 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
             });
         }
     };
+
+    // --- MARCAR NOTIFICACIONES DE CHAT COMO LEÍDAS AL ENTRAR ---
+    const markMessagesAsReadForThisTask = async () => {
+    try {
+        await notificationApi.markTaskChatNotificationsAsRead(taskId);
+        // El backend emitirá 'unread_count_updated', que NotificationBell escuchará.
+        // Para que el *indicador de punto en la lista de tareas* se actualice inmediatamente
+        // sin esperar un re-fetch completo de la lista de ProjectDetailPage,
+        // necesitaríamos una forma de decirle a ProjectDetailPage que re-evalúe esa tarea específica
+        // o que vuelva a cargar la lista de tareas.
+        // Por ahora, el indicador se actualizará la próxima vez que se cargue la lista de tareas.
+        console.log(`[TaskChat] Solicitud para marcar como leídas notificaciones de chat para tarea ${taskId} enviada.`);
+    } catch (error) {
+        console.error(`[TaskChat] Error al intentar marcar notificaciones de chat como leídas para tarea ${taskId}:`, error);
+    }
+    };
+    markMessagesAsReadForThisTask();
 
     console.log(`[TaskChat] Uniéndose a la sala: ${roomName} para tarea ${taskId}`);
     socketService.emit('join_task_chat_room', taskId.toString()); // El backend espera string o number
