@@ -16,41 +16,56 @@ export interface User {
 
 // Interface básica para objetos Project
 export interface Project {
-  // ... (contenido de la interfaz Project sin cambios) ...
   id: number;
   codigoUnico: string;
   nombre: string;
-  direccion?: string | null;
-  superficieTerreno?: number | null;
-  superficieEdificacion?: number | null;
-  ano?: number | null;
+  descripcion: string | null; // Ahora siempre es público
+  direccion: string | null;
+  superficieTerreno: number | null; // Prisma Decimal se convierte a number o string en JSON, ajusta si es string
+  superficieEdificacion: number | null; // Prisma Decimal se convierte a number o string
+  ano: number | null;
   proyectoPriorizado: boolean;
   createdAt: string | Date;
   updatedAt: string | Date;
-  estado?: { id: number; nombre: string } | null;
-  unidad?: { id: number; nombre: string; abreviacion: string } | null;
-  tipologia: { id: number; nombre: string; abreviacion: string; colorChip: string };
-  sector?: { id: number; nombre: string } | null;
-  descripcion?: string | null;
-  proyectistaId?: number | null;
+  location_point: any | null; // O un tipo GeoJSON más específico si lo tienes
+  area_polygon: any | null;   // O un tipo GeoJSON más específico
+
+  // Relaciones públicas (asumiendo que tienes tipos para estos en el frontend)
+  estado?: { id: number; nombre: string; } | null;
+  unidad?: { id: number; nombre: string; abreviacion: string; } | null;
+  tipologia?: { id: number; nombre: string; abreviacion: string; colorChip: string; } | null;
+  sector?: { id: number; nombre: string; } | null;
+  lineaFinanciamiento?: { id: number; nombre: string; } | null;
+  programa?: { id: number; nombre: string; } | null;
+  etapaActualFinanciamiento?: { id: number; nombre: string; } | null;
+
+  // IDs de relaciones que son públicos
+  estadoId: number | null;
+  unidadId: number | null;
+  tipologiaId: number; // Esta parece ser requerida en tu schema
+  sectorId: number | null;
+  lineaFinanciamientoId: number | null;
+  programaId: number | null;
+  etapaFinanciamientoId: number | null; // Tu schema lo tiene así
+  proyectistaId: number | null; // El ID es público
+
+  // Campos financieros básicos (públicos)
+  monto: string | number | null; // Prisma Decimal puede ser string
+  tipoMoneda: TipoMoneda;
+
+  // --- CAMPOS INTERNOS (Opcionales en el tipo del frontend) ---
   formuladorId?: number | null;
-  proyectista?: Pick<User, 'id' | 'name' | 'email'> | null;
-  formulador?: Pick<User, 'id' | 'name' | 'email'> | null;
-  colaboradores?: Array<Pick<User, 'id' | 'name' | 'email'>>;
-  lineaFinanciamientoId?: number | null;
-  programaId?: number | null;
-  etapaFinanciamientoId?: number | null;
-  monto?: string | number | null;
-  tipoMoneda?: TipoMoneda; // Usa el tipo exportado
+  proyectista?: UserProjectTeamMember | null; // Objeto de usuario, opcional
+  formulador?: UserProjectTeamMember | null;  // Objeto de usuario, opcional
+  colaboradores?: UserProjectTeamMember[];    // Array de objetos de usuario, opcional (podría ser [] si no hay o undefined si no se tiene permiso)
+
   codigoExpediente?: string | null;
-  fechaPostulacion?: string | Date | null;
-  montoAdjudicado?: string | number | null;
+  fechaPostulacion?: string | Date | null; // La API devuelve string, el DatePicker usa Date
+  montoAdjudicado?: string | number | null; // Prisma Decimal puede ser string
   codigoLicitacion?: string | null;
-  lineaFinanciamiento?: { id: number; nombre: string } | null;
-  programa?: { id: number; nombre: string; lineaFinanciamientoId: number; } | null; // Añadido lineaFinanciamientoId a Programa si API lo devuelve
-  etapaActualFinanciamiento?: { id: number; nombre: string } | null;
-  location_point?: GeoJSONPoint | null;
-  area_polygon?: GeoJSONPolygon | null;
+
+  // Relaciones con Tareas (si las incluyes directamente en el objeto Project en algún momento)
+  // tareas?: Task[]; // Opcional, y Task tendría su propia definición
 }
 
 
@@ -185,4 +200,11 @@ export interface PaginatedChatMessages {
     page: number;
     limit: number;
     totalPages: number;
+}
+
+export interface UserProjectTeamMember { // O UserSummary, UserDigest, etc.
+  id: number;
+  name?: string | null;
+  email: string;
+  // No incluimos 'role' aquí porque tu select en getProjectSelectFields no lo trae para proyectista/formulador/colaboradores
 }

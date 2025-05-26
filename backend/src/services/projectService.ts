@@ -1,8 +1,3 @@
-// ========================================================================
-// INICIO: Contenido completo para backend/src/services/projectService.ts
-// COPIA Y PEGA TODO ESTE BLOQUE EN TU ARCHIVO
-// ========================================================================
-
 import { Prisma, Role, TipoMoneda } from '@prisma/client';
 import prisma from '../config/prismaClient';
 import { CreateProjectInput, UpdateProjectInput, ListProjectsQuery } from '../schemas/projectSchemas';
@@ -45,14 +40,32 @@ const parseDateOptional = (value: unknown): Date | null => {
 // Define qué campos devolver según si el usuario está autenticado
 const getProjectSelectFields = (user?: AuthenticatedUser): Prisma.ProjectSelect => {
     const publicFields: Prisma.ProjectSelect = {
-        id: true, codigoUnico: true, nombre: true, direccion: true, superficieTerreno: true,
-        superficieEdificacion: true, ano: true, proyectoPriorizado: true, createdAt: true, updatedAt: true,
+        id: true, 
+        codigoUnico: true, 
+        nombre: true, 
+        descripcion: true, 
+        direccion: true, 
+        superficieTerreno: true,
+        superficieEdificacion: true, 
+        ano: true, 
+        proyectoPriorizado: true, 
+        createdAt: true, 
+        updatedAt: true,
         location_point: true,
         area_polygon: true,
         estado: { select: { id: true, nombre: true } },
         unidad: { select: { id: true, nombre: true, abreviacion: true } },
         tipologia: { select: { id: true, nombre: true, abreviacion: true, colorChip: true } },
         sector: { select: { id: true, nombre: true } },
+        lineaFinanciamiento: { select: { id: true, nombre: true } },
+        programa: { select: { id: true, nombre: true } },
+        etapaActualFinanciamiento: { select: { id: true, nombre: true } },
+        lineaFinanciamientoId: true, 
+        programaId: true, 
+        etapaFinanciamientoId: true,
+        proyectistaId: true,
+        monto: true, 
+        tipoMoneda: true,
     };
 
     // Si el usuario está logueado (y no es VISITANTE, aunque podrías tener lógica diferente),
@@ -60,16 +73,14 @@ const getProjectSelectFields = (user?: AuthenticatedUser): Prisma.ProjectSelect 
     if (user && user.role && user.role !== Role.VISITANTE) {
         return {
             ...publicFields,
-            descripcion: true, proyectistaId: true, formuladorId: true,
+            formuladorId: true,
             proyectista: { select: { id: true, name: true, email: true } },
             formulador: { select: { id: true, name: true, email: true } },
             colaboradores: { select: { id: true, name: true, email: true } }, // Asegúrate que el modelo User tenga 'name' y 'email'
-            lineaFinanciamientoId: true, programaId: true, etapaFinanciamientoId: true,
-            monto: true, tipoMoneda: true, codigoExpediente: true, fechaPostulacion: true,
-            montoAdjudicado: true, codigoLicitacion: true,
-            lineaFinanciamiento: { select: { id: true, nombre: true } },
-            programa: { select: { id: true, nombre: true } },
-            etapaActualFinanciamiento: { select: { id: true, nombre: true } }, // Corregido nombre del campo
+            codigoExpediente: true, 
+            fechaPostulacion: true,
+            montoAdjudicado: true, 
+            codigoLicitacion: true,
         };
     }
     // Si no hay usuario o es visitante, devuelve solo los campos públicos.
@@ -471,8 +482,3 @@ export const deleteProject = async (id: number, user: AuthenticatedUser) => {
     }
 };
 // =============== FIN NUEVA FUNCION deleteProject ===============
-
-
-// ========================================================================
-// FIN: Contenido completo para backend/src/services/projectService.ts
-// ========================================================================
