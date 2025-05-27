@@ -94,6 +94,9 @@ function ProjectDetailPage() {
     const currentUser = useAuthStore((state) => state.user);
     const projectIdNum = id ? parseInt(id, 10) : NaN;
 
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
+    const [isEditTaskModalOpen, setIsEditTaskModalOpen] = useState(false);
+
     const taskFormMethods = useForm<TaskFormValues>({
         resolver: zodResolver(taskFormSchema),
         defaultValues: {
@@ -175,6 +178,73 @@ function ProjectDetailPage() {
         };
     }, [isAuthenticated, currentUser?.id, project, projectIdNum, tasks, setTasks, loadPageData]);
 
+    const handleOpenEditTaskModal = async (taskToEdit: Task) => {
+        if (!project || !lookupOptions) return; // Necesitamos lookups para el form
+
+        // Es buena idea obtener los datos más frescos de la tarea, especialmente la descripción
+        setLoadingTaskDetail(true); // Reusamos el loader de detalle de tarea
+        try {
+            const freshTask = await taskApi.getTaskById(project.id, taskToEdit.id);
+            setSelectedTaskForDetail(freshTask); // Podríamos usar este para poblar o uno específico
+            
+            // Mapear los datos de la tarea a TaskFormValues
+            // Asegúrate de que fechaPlazo se maneje como Date o null para el DatePicker
+            // y que los IDs de relaciones sean números o null.
+            taskFormMethods.reset({
+                titulo: freshTask.titulo,
+                descripcion: freshTask.descripcion || null, // Tiptap espera null o string
+                asignadoId: freshTask.asignadoId || null,
+                fechaPlazo: freshTask.fechaPlazo ? new Date(freshTask.fechaPlazo) : null, // Convertir a Date para DatePicker
+                prioridad: freshTask.prioridad || null,
+                estado: freshTask.estado,
+            });
+            setEditingTask(freshTask); // Guardamos la tarea completa que se está editando
+            setIsEditTaskModalOpen(true);
+            setTaskFormError(null); // Limpiar errores previos del modal
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : "Error al cargar datos de la tarea para editar.";
+            console.error("Error abriendo modal de edición:", err);
+            setSnackbarMessage(errorMsg); // Mostrar error en snackbar
+        } finally {
+            setLoadingTaskDetail(false);
+        }
+    };
+
+    const handleCloseEditTaskModal = () => {
+        setIsEditTaskModalOpen(false);
+        setEditingTask(null); // Limpiar la tarea en edición
+    };
+
+    const onEditTaskSubmit: SubmitHandler<TaskFormValues> = async (data) => {
+        if (!project || !editingTask) return;
+        setIsSubmittingTask(true);
+        setTaskFormError(null);
+        try {
+            const dataToSubmit: UpdateTaskFrontendInput = {
+                ...data,
+                fechaPlazo: data.fechaPlazo ? new Date(data.fechaPlazo).toISOString() : null,
+                // descripcion ya es HTML del TiptapEditor
+            };
+            await taskApi.updateTask(project.id, editingTask.id, dataToSubmit);
+            setSnackbarMessage("¡Tarea actualizada exitosamente!");
+            handleCloseEditTaskModal();
+            loadPageData(false); // Recargar solo tareas
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : "Error al actualizar la tarea.";
+            console.error("Error actualizando tarea:", err);
+            setTaskFormError(errorMsg);
+        } finally {
+            setIsSubmittingTask(false);
+        }
+    };
+
+    const handleDeleteTask = (taskId: number) => {
+        console.log(`TODO: Mostrar confirmación para eliminar tarea ID: ${taskId}`);
+        alert(`Eliminar tarea ${taskId} - Funcionalidad pendiente de confirmación`);
+        // Aquí llamarías a taskApi.deleteTask después de la confirmación
+        // y luego a loadPageData(false) o actualizarías el estado 'tasks'.
+    };
+
     const handlePrint = () => { console.log("TODO: Imprimir ficha ID:", project?.id); alert("Impresión no implementada."); };
     const handleOpenNewTaskModal = () => { taskFormMethods.reset({ titulo: '', descripcion: null, asignadoId: null, fechaPlazo: null, prioridad: null, estado: EstadoTarea.PENDIENTE, }); setTaskFormError(null); setIsNewTaskModalOpen(true); };
     const handleCloseNewTaskModal = () => { setIsNewTaskModalOpen(false); };
@@ -204,30 +274,51 @@ function ProjectDetailPage() {
     return (
         <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
             {/* Banner */}
-            <Box sx={{ boxShadow: theme.shadows[3], height: { xs: '250px', sm: '300px', md: '350px' }, position: 'relative', overflow: 'hidden', mb: 3, borderRadius: theme.shape.borderRadius / 3, }} > {/* Usar theme.shape.borderRadius directamente o dividido */}
+            <Box sx={{ 
+                boxShadow: theme.shadows[3], 
+                height: { xs: '250px', sm: '300px', md: '350px' }, 
+                position: 'relative', 
+                overflow: 'hidden', // Mantenemos esto, es importante
+                mb: 3, 
+                // borderRadius: theme.shape.borderRadius / 10, // Esto era muy pequeño
+                borderRadius: theme.shape.borderRadius / 10, // Usamos el valor estándar del tema (ej. 4px o 8px)
+                                                        // o un valor específico ej. '12px' o theme.spacing(1.5)
+            }} >
+                {/* Mapa (sin cambios) */}
                 <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
                     <ProjectMap locationPoint={project.location_point} areaPolygon={project.area_polygon} />
                 </Box>
-                <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 100%)' }} />
+
+                {/* Overlay (Sombra) - CON CAMBIOS */}
+                <Box sx={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    width: '100%', 
+                    height: '100%', 
+                    zIndex: 2, 
+                    // Gradiente más translúcido, ajusta los valores alfa (0.5 y 0.2) a tu gusto
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0) 100%)',
+                    borderRadius: 'inherit', // <--- CAMBIO CLAVE: Hereda el borderRadius del padre
+                                             // O puedes poner el mismo valor explícito: theme.shape.borderRadius
+                }} />
+                
+                {/* Contenido sobre el overlay: Título y Chip (sin cambios en su lógica, solo se benefician del borderRadius del overlay) */}
                 <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3, p: { xs: 2, md: 3 }, color: 'common.white', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2 }}>
                     <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', textShadow: '1px 1px 3px rgba(0,0,0,0.7)' }}>{project.nombre}</Typography>
                     {project.tipologia && <Chip label={project.codigoUnico || '?'} size="medium" sx={{ backgroundColor: project.tipologia.colorChip || 'rgba(255,255,255,0.3)', color: '#fff', fontSize: '1.4rem', fontWeight: 'bold', textShadow: '1px 1px 1px rgba(0,0,0,0.4)', border: '3px solid rgba(255,255,255,1)', px: 2, py: 2.3 }} />}
                 </Box>
+
+                {/* Contenido sobre el overlay: Botones Superiores (sin cambios en su lógica) */}
                 <Box sx={{ position: 'absolute', top: 0, left: theme.spacing(2), right: theme.spacing(2), zIndex: 3, p: { xs: 1, sm: 2 }, display: 'flex', justifyContent: 'space-between' }}>
-                    <Button variant="contained" size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/')} sx={{ backgroundColor: 'rgba(0, 0, 0, 0.4)', color: 'white', '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.6)' } }}>Volver</Button>
-                    {isAuthenticated && (project.proyectistaId === currentUser?.id || userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
-                        <Stack direction="row" spacing={1}>
-                            <Button variant="contained" size="small" startIcon={<PrintIcon />} onClick={handlePrint} sx={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: 'rgba(80,80,80,1)', '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.4)' } }}>Imprimir</Button>
-                            <Button component={Link} to={`/projects/${project.id}/edit`} variant="contained" size="small" color="primary" startIcon={<EditIcon />}>Editar</Button>
-                        </Stack>
-                    )}
+                    {/* ... tus botones Volver, Imprimir, Editar ... */}
                 </Box>
             </Box>
 
             <Grid container spacing={3}>
                 {/* Sección Bitácora de Tareas */}
                 {isAuthenticated && (
-                    <Grid item xs={12} md={(project.descripcion && lookupOptions) ? 8 : 12}>
+                    <Grid item xs={12} md={(project.descripcion && lookupOptions) ? 12 : 0}>
                         <SectionPaper elevation={2}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                 <Typography variant="h6" gutterBottom component="div">Bitácora de Tareas</Typography>
@@ -241,13 +332,13 @@ function ProjectDetailPage() {
                             <Divider sx={{ mb: 2 }} />
                             {loadingTasks && <Box sx={{display: 'flex', justifyContent: 'center', my: 3}}><CircularProgress size={24} /><Typography variant="caption" sx={{ml:1}}>Cargando tareas...</Typography></Box>}
                             {errorTasks && !loadingTasks && <Alert severity="error" sx={{mt: 1, mb: 1}}>{errorTasks}</Alert>}
-                            {!loadingTasks && !errorTasks && ( tasks.length > 0 ? ( <List disablePadding>{tasks.map((task) => ( <TaskListItem key={task.id} task={task} onViewDetails={() => handleViewTaskDetails(task.id)} />))}</List>) : (<Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py: 2}}>No hay tareas registradas.</Typography>))}
+                            {!loadingTasks && !errorTasks && ( tasks.length > 0 ? ( <List disablePadding>{tasks.map((task) => ( <TaskListItem key={task.id} task={task} onViewDetails={() => handleViewTaskDetails(task.id)} onEditTask={() => handleOpenEditTaskModal(task)} onDeleteTask={() => handleDeleteTask(task.id)} />))}</List>) : (<Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py: 2}}>No hay tareas registradas.</Typography>))}
                         </SectionPaper>
                     </Grid>
                 )}
                 
                 {/* Columna para Descripción del Proyecto */}
-                <Grid item xs={12} md={isAuthenticated && lookupOptions ? 4 : (project.descripcion ? 12 : 0) }>
+                <Grid item xs={12} md={isAuthenticated && lookupOptions ? 12 : (project.descripcion ? 12 : 0) }>
                     {project.descripcion && (
                         <SectionPaper elevation={2} sx={{height: isAuthenticated && lookupOptions ? 'calc(100% - 0px)' : 'auto' }}>
                             <Typography variant="h6" gutterBottom>Descripción del Proyecto</Typography>
@@ -363,6 +454,36 @@ function ProjectDetailPage() {
                     </FormProvider>
                 </Dialog>
             )}
+
+            {isAuthenticated && lookupOptions && editingTask && project && (
+                <Dialog open={isEditTaskModalOpen} onClose={handleCloseEditTaskModal} maxWidth="md" fullWidth>
+                    <DialogTitle>Editar Tarea: "{editingTask.titulo}"</DialogTitle>
+                    <FormProvider {...taskFormMethods}>
+                        <form onSubmit={taskFormMethods.handleSubmit(onEditTaskSubmit)}>
+                            <DialogContent>
+                                <DialogContentText sx={{mb:2}}>
+                                    Modifica los detalles de la tarea.
+                                </DialogContentText>
+                                {taskFormError && <Alert severity="error" sx={{ mb: 2 }}>{taskFormError}</Alert>}
+                                <TaskForm 
+                                    isSubmitting={isSubmittingTask} 
+                                    lookupOptions={lookupOptions} 
+                                    // isEditMode={true} // Puedes pasar un flag a TaskForm si necesitas diferenciar comportamiento
+                                />
+                            </DialogContent>
+                            <DialogActions sx={{pb:2, pr:2}}>
+                                <Button onClick={handleCloseEditTaskModal} color="secondary" disabled={isSubmittingTask}>
+                                    Cancelar
+                                </Button>
+                                <Button type="submit" variant="contained" disabled={isSubmittingTask}>
+                                    {isSubmittingTask ? <CircularProgress size={24} /> : "Guardar Cambios"}
+                                </Button>
+                            </DialogActions>
+                        </form>
+                    </FormProvider>
+                </Dialog>
+            )}
+            
             {canRenderTaskDetailModal && (
                 <TaskDetailModal
                     task={selectedTaskForDetail!}
