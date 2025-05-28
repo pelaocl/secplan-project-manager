@@ -234,6 +234,10 @@ export const getTaskById = async (
             mensajes: { 
                 orderBy: { fechaEnvio: 'asc' },
                 include: { remitente: { select: { id: true, name: true, email: true, role: true } } }
+            },
+            chatStatuses: { 
+                where: { userId: requestingUserPayload.id },
+                select: { lastReadTimestamp: true }
             }
         }
     });

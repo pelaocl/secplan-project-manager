@@ -1,120 +1,92 @@
 // frontend/src/components/TaskChat.tsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, CircularProgress, Paper, Typography, IconButton, Alert, useTheme } from '@mui/material';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Box, Button, CircularProgress, Paper, Typography, IconButton, Alert, useTheme, Fab, Divider, Chip as MuiChip } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import DOMPurify from 'dompurify';
 
-import { ChatMessage, UserPayload } from '../types'; // Task y User no se usan directamente como props
+import { ChatMessage, UserPayload } from '../types';
 import { useCurrentUser } from '../store/authStore';
 import ChatMessageItem from './ChatMessageItem';
 import { chatMessageService } from '../services/chatMessageApi';
 import { socketService } from '../services/socketService';
-import { notificationApi } from '../services/notificationApi'; // Para marcar notificaciones globales
-import { taskApi } from '../services/taskApi'; // <-- AÑADIDO para markTaskChatAsViewed
+import { notificationApi } from '../services/notificationApi';
+import { taskApi } from '../services/taskApi';
 import TiptapEditor from './TiptapEditor';
-
-// Configuración de Quill/Tiptap (asegúrate que esta sea la que funciona para ti)
-// Esta es la que incluye el handler de imagen y formatos completos que usaste en ProjectForm
-// Si quieres una toolbar más simple para el chat, puedes definir otra constante aquí.
-const chatEditorModules = {
-  toolbar: {
-    container: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      ['link', 'image'],
-      ['clean']
-    ],
-    handlers: {
-      image: function(this: { quill: any }) { // Asumiendo que Tiptap lo maneja similar o que TiptapEditor no usa este handler directamente
-                                            // Si TiptapEditor usa EditorToolbar, esta config se pasa implícitamente.
-                                            // Para Tiptap, el handler de imagen se configura en las extensiones.
-                                            // Por simplicidad, si TiptapEditor usa la EditorToolbar que ya tiene el prompt, está bien.
-        const url = prompt('Por favor, ingrese la URL de la imagen:');
-        if (url && this.quill) { // this.quill es específico de ReactQuill
-          const quillInstance = this.quill;
-          const range = quillInstance.getSelection(true);
-          quillInstance.insertEmbed(range.index, 'image', url, 'user');
-        }
-      }
-    }
-  }
-};
-
-const chatEditorFormats = [
-  'header', 'bold', 'italic', 'underline',
-  'list', 'bullet', 'link', 'image'
-];
-
 
 interface TaskChatProps {
   projectId: number;
   taskId: number;
   initialMessages: ChatMessage[];
+  initialLastReadTimestamp?: string | Date | null;
 }
 
-const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages }) => {
+const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages, initialLastReadTimestamp }) => {
   const theme = useTheme();
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [newMessageContent, setNewMessageContent] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
+  const [firstUnreadMessageIdOnLoad, setFirstUnreadMessageIdOnLoad] = useState<number | null>(null);
+  const [hasScrolledInitially, setHasScrolledInitially] = useState(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  useEffect(() => {
-    if (!taskId || !currentUser || !projectId) { // projectId añadido al guard
-        console.warn('[TaskChat] useEffect: Faltan IDs o currentUser para configurar el chat.', { taskId, currentUser: !!currentUser, projectId });
+    if (!taskId || !currentUser || !projectId) {
+        console.warn('[TaskChat] useEffect principal: Faltan IDs o currentUser.', { taskId, currentUser: !!currentUser, projectId });
         return;
     }
-
     const roomName = `task_chat_${taskId}`;
     
-    // Marcar las notificaciones GLOBALES de chat para esta tarea como leídas
-    const markGlobalChatNotificationsAsRead = async () => {
+    const markChatAsEffectivelyViewed = async () => {
+      try {
+        console.log(`[TaskChat] Intentando marcar chat como VISTO (UserTaskChatStatus) para tarea ${taskId}, proyecto ${projectId}`);
+        await taskApi.markTaskChatAsViewed(projectId, taskId);
+        console.log(`[TaskChat] Llamada a API markTaskChatAsViewed exitosa.`);
+      } catch (error) { console.error(`[TaskChat] Error al marcar chat como VISTO para tarea ${taskId}:`, error); }
+
       try {
         console.log(`[TaskChat] Intentando marcar notificaciones GLOBALES de chat como leídas para tarea ID: ${taskId}`);
-        const response = await notificationApi.markTaskChatNotificationsAsRead(taskId);
-        console.log(`[TaskChat] Llamada a API markTaskChatNotificationsAsRead (global) exitosa. Respuesta:`, response);
-      } catch (error) {
-        console.error(`[TaskChat] Error al marcar notificaciones GLOBALES de chat como leídas para tarea ${taskId}:`, error);
-      }
+        await notificationApi.markTaskChatNotificationsAsRead(taskId);
+        console.log(`[TaskChat] Llamada a API markTaskChatNotificationsAsRead (global) exitosa.`);
+      } catch (error) { console.error(`[TaskChat] Error al marcar notificaciones GLOBALES como leídas para tarea ${taskId}:`, error); }
     };
 
-    // Marcar el CHAT de esta tarea como VISTO por el usuario (actualiza UserTaskChatStatus)
-    const markChatItselfAsViewed = async () => {
-        try {
-            console.log(`[TaskChat] Intentando marcar chat como VISTO (UserTaskChatStatus) para tarea ${taskId}, proyecto ${projectId}`);
-            await taskApi.markTaskChatAsViewed(projectId, taskId); // <--- LLAMADA A LA NUEVA FUNCIÓN
-            console.log(`[TaskChat] Llamada a API markTaskChatAsViewed exitosa.`);
-            // El backend emitirá 'task_chat_status_updated', que ProjectDetailPage escuchará para quitar el punto rojo.
-        } catch (error) {
-            console.error(`[TaskChat] Error al marcar chat como VISTO para tarea ${taskId}:`, error);
-        }
-    };
-
-    markGlobalChatNotificationsAsRead(); // Para la campana de TopAppBar
-    markChatItselfAsViewed();           // Para el indicador de la lista de tareas
+    markChatAsEffectivelyViewed();
 
     console.log(`[TaskChat] Socket: Uniéndose a la sala: ${roomName} para tarea ${taskId}`);
     socketService.emit('join_task_chat_room', taskId.toString());
     
     const newMessageHandler = (newMessage: ChatMessage) => {
-        console.log(`[TaskChat] Socket: Nuevo mensaje recibido para tarea ${taskId}:`, newMessage);
         if (newMessage.tareaId === taskId) {
             setMessages((prevMessages) => {
                 if (prevMessages.find(m => m.id === newMessage.id)) return prevMessages;
-                return [...prevMessages, newMessage];
+                const updatedMessages = [...prevMessages, newMessage];
+                
+                const container = messagesContainerRef.current;
+                if (container && newMessage.remitente.id !== currentUser?.id) {
+                    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= 60; 
+                    if (!isNearBottom) {
+                        setShowNewMessagesButton(true);
+                        if(!showNewMessagesButton) {
+                            setFirstUnreadMessageIdOnLoad(currentFirstUnread => currentFirstUnread === null ? newMessage.id : currentFirstUnread);
+                        }
+                    } else {
+                         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 0);
+                    }
+                }
+                return updatedMessages;
             });
         }
     };
     socketService.on('nuevo_mensaje_chat', newMessageHandler);
 
-    return () => {
+    return () => { 
         console.log(`[TaskChat] Socket: Dejando la sala: ${roomName} para tarea ${taskId}`);
         socketService.emit('leave_task_chat_room', taskId.toString());
         const socket = socketService.getSocket();
@@ -122,21 +94,83 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
             socket.off('nuevo_mensaje_chat', newMessageHandler);
         }
     };
-  }, [taskId, currentUser, projectId]); // projectId añadido como dependencia
+  }, [taskId, currentUser, projectId, showNewMessagesButton]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || messages.length === 0 || hasScrolledInitially) {
+        if(messages.length === 0) setShowNewMessagesButton(false);
+        return;
+    }
+    let newFirstUnreadMsgIdForThisLoad: number | null = null;
+    let scrollToBottom = true; 
+    if (initialLastReadTimestamp) {
+        const lastReadTime = new Date(initialLastReadTimestamp).getTime();
+        for (let i = 0; i < messages.length; i++) {
+            const message = messages[i];
+            if (new Date(message.fechaEnvio).getTime() > lastReadTime) {
+                if (message.remitente.id !== currentUser?.id) { 
+                    newFirstUnreadMsgIdForThisLoad = message.id;
+                    scrollToBottom = false; 
+                    break; 
+                }
+            }
+        }
+    } else if (messages.length > 0 && messages.some(m => m.remitente.id !== currentUser?.id)) {
+        newFirstUnreadMsgIdForThisLoad = messages.find(m => m.remitente.id !== currentUser?.id)?.id || null;
+        scrollToBottom = false;
+    }
+    if (!scrollToBottom && newFirstUnreadMsgIdForThisLoad) {
+        console.log(`[TaskChat] Scroll inicial: Hay mensajes nuevos (ID más reciente no leído por OTRO: ${newFirstUnreadMsgIdForThisLoad}). Mostrando botón.`);
+        setFirstUnreadMessageIdOnLoad(newFirstUnreadMsgIdForThisLoad);
+        setShowNewMessagesButton(true);
+        const lastReadMsgIndex = messages.findIndex(m => newFirstUnreadMsgIdForThisLoad && m.id === newFirstUnreadMsgIdForThisLoad) -1;
+        if (lastReadMsgIndex >=0) {
+           const elementToScrollTo = document.getElementById(`message-item-${messages[lastReadMsgIndex].id}`);
+           elementToScrollTo?.scrollIntoView({behavior: 'auto', block: 'start'});
+        } else { 
+           container.scrollTop = 0;
+        }
+    } else {
+        console.log("[TaskChat] Scroll inicial: No hay mensajes nuevos de otros o no hay 'initialLastReadTimestamp'. Scrolleando al fondo.");
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+        setShowNewMessagesButton(false);
+    }
+    setHasScrolledInitially(true);
+  }, [messages, initialLastReadTimestamp, currentUser?.id, hasScrolledInitially]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            const threshold = 30; 
+            const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+            if (isAtBottom) {
+                if (showNewMessagesButton) setShowNewMessagesButton(false);
+                setFirstUnreadMessageIdOnLoad(null); 
+            } else {
+                if (firstUnreadMessageIdOnLoad && !showNewMessagesButton && messages.some(m => m.id === firstUnreadMessageIdOnLoad && new Date(m.fechaEnvio) > new Date(initialLastReadTimestamp || 0) && m.remitente.id !== currentUser?.id )) {
+                    setShowNewMessagesButton(true);
+                }
+            }
+        }, 150); 
+    };
+    container.addEventListener('scroll', handleScroll);
+    return () => { clearTimeout(scrollTimeout); container.removeEventListener('scroll', handleScroll); };
+  }, [showNewMessagesButton, firstUnreadMessageIdOnLoad, initialLastReadTimestamp, messages, currentUser?.id]);
 
   const handleSendMessage = async () => {
     if (!newMessageContent || !currentUser) {
         setError("El mensaje no puede estar vacío.");
         return;
     }
-
-    // Si tu EditorToolbar para Tiptap en el chat permite ciertos tags, ajústalos aquí.
-    // Esta configuración permite los mismos que la toolbar completa.
     const cleanHtml = DOMPurify.sanitize(newMessageContent, { 
-        ALLOWED_TAGS: ['h1', 'h2', 'h3', 'p', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'a', 'br', 'img'],
+        ALLOWED_TAGS: ['h1','h2','h3','p','strong','em','u','ol','ul','li','a','br','img'],
         ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title']
     });
-
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = cleanHtml;
     const textContentFromCleanHtml = tempDiv.textContent || tempDiv.innerText || "";
@@ -160,25 +194,37 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
     }
   };
   
-  // const editorRef = useRef<ReactQuill>(null); // Ya no se necesita y fue eliminado
-
-  if (!currentUser) {
-    return <Typography>Debes estar autenticado para participar en el chat.</Typography>;
-  }
+  if (!currentUser) { return <Typography>Debes estar autenticado para participar en el chat.</Typography>; }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '500px' }}>
-      <Paper variant="outlined" sx={{ flexGrow: 1, p: 2, overflowY: 'auto', mb: 2, backgroundColor: 'background.default' }}>
-        {messages.length === 0 && (
-          <Typography color="text.secondary" textAlign="center" sx={{ mt: 2 }}>
-            No hay mensajes en esta tarea aún. ¡Sé el primero!
-          </Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '500px', position: 'relative' }}>
+      <Paper ref={messagesContainerRef} variant="outlined" sx={{ flexGrow: 1, p: 2, overflowY: 'auto', mb: 2, backgroundColor: 'background.default', position: 'relative' }}>
+        {messages.length === 0 && ( <Typography color="text.secondary" textAlign="center" sx={{ mt: 2 }}>No hay mensajes en esta tarea aún. ¡Sé el primero!</Typography> )}
+        {messages.map((msg, index) => (
+    <React.Fragment key={msg.id}>
+        {/* Insertar el divisor ANTES del primer mensaje no leído por el usuario actual */}
+        {msg.id === firstUnreadMessageIdOnLoad && msg.remitente.id !== currentUser?.id && (
+            <Divider sx={{ my: 2, '&::before, &::after': { borderColor: 'primary.light' } }}>
+                <MuiChip label="Nuevos mensajes" size="small" color="primary" variant="outlined" />
+            </Divider>
         )}
-        {messages.map((msg) => (
-          <ChatMessageItem key={msg.id} message={msg} />
-        ))}
+        <Box id={`message-item-${msg.id}`}>
+            <ChatMessageItem message={msg} />
+        </Box>
+    </React.Fragment>
+))}
         <div ref={messagesEndRef} />
       </Paper>
+
+      {showNewMessagesButton && (
+        <Fab color="primary" size="small" onClick={() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); setShowNewMessagesButton(false); setFirstUnreadMessageIdOnLoad(null); }}
+            sx={{ position: 'absolute', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 10, boxShadow: theme.shadows[6] }}
+            aria-label="Ir a mensajes nuevos"
+        >
+            <ArrowDownwardIcon />
+        </Fab>
+      )}
+
       <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 1, borderTop: 1, borderColor: 'divider', pt:1.5 }}>
          <Box sx={{ flexGrow: 1 }}>
             <TiptapEditor
@@ -186,8 +232,6 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
                 onChange={setNewMessageContent}
                 placeholder="Escribe tu mensaje..."
                 disabled={isSending}
-                // Para el chat, queremos la toolbar SIN encabezados.
-                // TiptapEditor y EditorToolbar ya están configurados para aceptar esta prop.
                 showHeadersInToolbar={false} 
             />
          </Box>
@@ -196,7 +240,8 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages 
             color="primary"
             size="medium"
             onClick={handleSendMessage}
-            disabled={isSending || !newMessageContent || newMessageContent === "<p></p>" || (typeof newMessageContent === 'string' && !newMessageContent.replace(/<p><br><\/p>/g, '').trim()) }
+            // Lógica completa para deshabilitar el botón
+            disabled={isSending || !newMessageContent || (typeof newMessageContent === 'string' && (!newMessageContent.replace(/<[^>]+>/g, '').trim() || newMessageContent === '<p></p>' || newMessageContent === '<p><br></p>')) }
             endIcon={isSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
             sx={{ ml: 1, borderRadius: '8px', alignSelf: 'flex-end', mb: '1px' }}
         >

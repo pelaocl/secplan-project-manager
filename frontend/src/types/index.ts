@@ -171,10 +171,13 @@ export interface Task {
     id: number;
     nombre: string;
     codigoUnico: string;
+    proyectistaId?: number | null;
   };
   mensajes?: ChatMessage[]; // Array de mensajes, se cargará en getTaskById
+  tieneMensajesNuevosEnChat?: boolean;
+  chatStatuses?: { lastReadTimestamp: string | Date | null }[] | null;
 
-  tieneNotificacionesChatNoLeidasParaUsuarioActual?: boolean;
+  
 }
 
 // --- Tipos para los Inputs de Formularios de Tareas (Frontend) ---

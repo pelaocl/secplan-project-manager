@@ -25,13 +25,15 @@ interface TaskDetailModalProps {
   // projectUsers?: UserOption[]; 
 }
 
-const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, open, onClose /*, projectUsers */ }) => {
+const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, open, onClose }) => {
   const theme = useTheme();
 
   if (!task) {
     // No debería pasar si se controla bien la apertura del modal, pero es una salvaguarda
     return null; 
   }
+  
+  const initialLastRead = task.chatStatuses?.[0]?.lastReadTimestamp || null;
 
   const formatDate = (dateString?: string | Date | null): string => {
     if (!dateString) return 'N/A';
@@ -102,7 +104,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, open, onClose /
             </Box>
         )}
         
-        {/* --- SECCIÓN DE CHAT ACTUALIZADA --- */}
+        {/* --- SECCIÓN DE CHAT */}
         <Box mt={3} id="task-chat-section" sx={{ /* Podrías querer dar una altura fija al contenedor del chat si es necesario */ }}>
             <Typography variant="h6" gutterBottom sx={{fontSize: '1.1rem', fontWeight: 'medium', mb:1.5}}>
                 Chat de la Tarea
@@ -111,6 +113,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, open, onClose /
                 projectId={task.proyecto.id}
                 taskId={task.id} 
                 initialMessages={task.mensajes || []} // task.mensajes viene del getTaskById
+                initialLastReadTimestamp={initialLastRead}
             />
         </Box>
         {/* --- FIN SECCIÓN CHAT --- */}
