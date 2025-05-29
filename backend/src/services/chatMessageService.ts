@@ -143,8 +143,47 @@ export const createChatMessage = async (
 
 // La función getChatMessagesByTaskId ya selecciona explícitamente los campos del remitente,
 // por lo que no debería exponer passwords.
-export const getChatMessagesByTaskId = async ( /* ... */ ) => { /* ... tu código existente ... */ };
+export const getChatMessagesByTaskId = async (
+    taskId: number,
+    requestingUserPayload: UserPayload,
+    query: GetChatMessagesQuery // Para paginación
+): Promise<{ messages: MensajeChatTarea[], totalMessages: number, page: number, limit: number, totalPages: number }> => {
+    // 1. Verificar que la tarea exista y que el usuario tenga permiso para ver sus mensajes
+    await checkTaskChatAccess(taskId, requestingUserPayload); // Reutilizamos el helper de acceso
 
+    // 2. Configurar paginación
+    const page = query.page || 1;
+    const limit = query.limit || 20; // Default a 20 mensajes por página
+    const skip = (page - 1) * limit;
+
+    // 3. Obtener los mensajes y el conteo total para la paginación
+    const [messages, totalMessages] = await prisma.$transaction([
+        prisma.mensajeChatTarea.findMany({
+            where: { tareaId: taskId },
+            include: {
+                remitente: {
+                    select: { id: true, name: true, email: true, role: true } // Datos del remitente
+                }
+            },
+            orderBy: {
+                fechaEnvio: 'asc', // Mensajes más antiguos primero, o 'desc' para más nuevos primero
+            },
+            skip: skip,
+            take: limit,
+        }),
+        prisma.mensajeChatTarea.count({
+            where: { tareaId: taskId }
+        })
+    ]);
+
+    return {
+        messages,
+        totalMessages,
+        page,
+        limit,
+        totalPages: Math.ceil(totalMessages / limit)
+    };
+};
 
 export const chatMessageService = {
     createChatMessage,
