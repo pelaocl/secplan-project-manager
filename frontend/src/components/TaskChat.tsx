@@ -176,20 +176,9 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
     return () => { clearTimeout(scrollTimeout); container.removeEventListener('scroll', handleScroll); };
   }, [showNewMessagesButton, firstUnreadMessageIdForDivider, messages.length]); // messages.length para re-evaluar si cambia el scrollHeight
 
-  const adjustTextareaHeight = () => {
-    if (chatInputRef.current) {
-      chatInputRef.current.style.height = 'auto'; // Reset height
-      const scrollHeight = chatInputRef.current.scrollHeight;
-      const lineHeight = parseInt(window.getComputedStyle(chatInputRef.current).lineHeight, 10) || 20; // Approx line height
-      const maxHeight = lineHeight * 3 + (chatInputRef.current.offsetHeight - chatInputRef.current.clientHeight); // Max 3 lines + padding/border
-      chatInputRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
-      chatInputRef.current.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
-    }
-  };
-
-  useEffect(() => { // Para ajustar altura del textarea al escribir
-    adjustTextareaHeight();
-  }, [newMessageText]);
+  useEffect(() => {
+    }, [newMessageText]);
+  // --- FIN AJUSTAR ALTURA ---
 
 
   const handleInsertImageLink = () => {
@@ -273,60 +262,72 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
         </Fab>
       )}
 
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, borderTop: 1, borderColor: 'divider', pt:1.5, pb: 1 }}>
+{/* --- ÁREA DE INPUT MODIFICADA --- */}
+<Box sx={{ 
+          display: 'flex', 
+          alignItems: 'flex-end', // Importante para alinear botones con el textarea cuando crece
+          gap: 1, 
+          borderTop: 1, 
+          borderColor: 'divider', 
+          pt: 1, // Reducido padding top
+          pb: 0.5  // Reducido padding bottom para que esté más pegado al final
+        }}
+      >
         <Tooltip title="Adjuntar imagen desde URL">
-            <IconButton onClick={handleInsertImageLink} disabled={isSending} sx={{p:1}}>
-                <ImageIcon />
+            <IconButton onClick={handleInsertImageLink} disabled={isSending} sx={{p: theme.spacing(1.25) /* Consistencia en padding */}}>
+                <ImageIcon fontSize="small"/>
             </IconButton>
         </Tooltip>
         <TextField
-            inputRef={chatInputRef}
+            inputRef={chatInputRef} // Usar inputRef para el textarea interno
             fullWidth
             multiline
+            minRows={1}
+            maxRows={3}
             value={newMessageText}
-            onChange={(e) => {
-                setNewMessageText(e.target.value);
-                // adjustTextareaHeight() se llama desde el useEffect [newMessageText]
-            }}
+            onChange={(e) => setNewMessageText(e.target.value)}
             placeholder="Escribe un mensaje..."
             disabled={isSending}
             variant="outlined"
-            size="small"
+            size="small" // Para un look más compacto
+            rows={1} // Iniciar con 1 fila
             onKeyPress={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSendMessage();
                 }
             }}
+            // No necesitamos InputProps.rows aquí si usamos el useEffect con adjustTextareaHeight
+            // La lógica de maxHeight y overflowY se maneja en adjustTextareaHeight
             sx={{
                 flexGrow: 1,
-                mr: 1, // Margen para separar del botón de enviar
+                mr: 0.5, 
                 '& .MuiInputBase-root': { 
-                    borderRadius: '20px', // Input más redondeado
-                    backgroundColor: theme.palette.background.default,
+                    borderRadius: '20px',
+                    backgroundColor: theme.palette.mode === 'light' ? theme.palette.grey[50] : theme.palette.grey[800],
+                    pt: '5px', // Ajusta el padding superior DENTRO del MuiInputBase-root
+                    pb: '5px', // Ajusta el padding inferior DENTRO del MuiInputBase-root
+                    alignItems: 'center', // Para centrar el texto si es una sola línea
                 },
-                '& .MuiOutlinedInput-input': {
-                    py: '10px', // Padding vertical para el texto
-                    lineHeight: '1.4',
+                '& .MuiOutlinedInput-input': { // Estilos para el <textarea> interno
+                    // py: '10px', // Eliminamos o reducimos el padding vertical aquí, minRows/maxRows lo manejan mejor
+                    paddingTop: '3.5px', // Padding más fino para el texto dentro del input
+                    paddingBottom: '3.5px',// Padding más fino para el texto dentro del input
+                    lineHeight: '1.43', // Ajuste de altura de línea estándar
                     fontSize: '0.875rem',
-                    maxHeight: `${(1.4 * 14 * 3) + 20}px`, // 3 líneas de texto (14px * 1.4) + padding
-                    overflowY: 'auto', // Scroll si excede 3 líneas
+                    // maxHeight y overflowY ahora son manejados por maxRows
                 }
             }}
         />
         <Tooltip title="Enviar mensaje">
-            <span> {/* Para que Tooltip funcione con botón deshabilitado */}
-                <IconButton
-                    color="primary"
-                    onClick={handleSendMessage}
-                    disabled={isSending || (!newMessageText.trim() && !imageToSend)}
-                    sx={{p:1}}
-                >
-                    {isSending ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
+            <span>
+                <IconButton color="primary" onClick={handleSendMessage} disabled={isSending || (!newMessageText.trim() && !imageToSend)} sx={{p: theme.spacing(1.25)}}>
+                    {isSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon fontSize="small" />}
                 </IconButton>
             </span>
         </Tooltip>
       </Box>
+      {/* --- FIN ÁREA DE INPUT MODIFICADA --- */}
       {error && <Alert severity="error" sx={{mt:1}}>{error}</Alert>}
     </Box>
   );
