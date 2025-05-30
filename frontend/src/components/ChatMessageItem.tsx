@@ -63,7 +63,7 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
           <Box
             className="quill-chat-content" // Para estilos específicos si es necesario
             sx={{ 
-              lineHeight: 1.5, 
+              lineHeight: 1.3, 
               '& p': { my: 0, lineHeight: 'inherit' }, // Asegura que el p herede el line-height del Box
               '& strong': { fontWeight: 'bold' },
               '& em': { fontStyle: 'italic' },

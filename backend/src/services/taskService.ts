@@ -244,7 +244,8 @@ export const getTaskById = async (
 
     if (!task) throw new NotFoundError(`Tarea con ID ${taskId} no encontrada.`);
     if (task.proyectoId !== projectId) throw new ForbiddenError(`La tarea ${taskId} no pertenece al proyecto ${projectId}.`);
-    
+    console.log("[taskService.getTaskById] Task data from DB:", JSON.stringify(task, null, 2)); // <--- AÑADE ESTE LOG
+
     return task;
 };
 

@@ -1,6 +1,3 @@
-// ========================================================================
-// INICIO: Contenido FINAL para frontend/src/components/IconDetailItem.tsx
-// ========================================================================
 import React from 'react';
 import { Box, Stack, Typography, SvgIcon, Tooltip } from '@mui/material';
 
@@ -9,6 +6,9 @@ interface IconDetailItemProps {
     icon: typeof SvgIcon; // Espera el componente del icono (ej. BusinessIcon)
     label: string;
     value: React.ReactNode | string | null | undefined; // Permite texto o componentes como valor
+    valueComponent?: React.ReactNode;
+    dense?: boolean;                  // Prop para un estilo más compacto
+    sx?: object;                      // Prop para estilos personalizados
 }
 
 /**
@@ -22,6 +22,9 @@ const IconDetailItem: React.FC<IconDetailItemProps> = ({
     icon: Icon, // Renombra la prop para usarla como componente
     label,
     value,
+    valueComponent,
+    dense,
+    sx
 }) => {
     return (
         // Contenedor Flexbox para alinear icono y bloque de texto
@@ -45,28 +48,30 @@ const IconDetailItem: React.FC<IconDetailItemProps> = ({
                 >
                     {label}
                 </Typography>
-                <Typography
-                    variant="body2" // Usar body2 para el valor, como en la referencia
-                    component="div" // Permite que el valor sea otro componente si es necesario
-                    sx={{ fontWeight: 500, lineHeight: 1.4, wordWrap: 'break-word' }} // Semibold, buen interlineado
-                >
-                    {/* Muestra 'No especificado' con estilo si el valor es null/undefined/vacío */}
-                    {value != null && value !== '' ? value : (
-                        <Typography
-                            variant="body2" // Mismo variant
-                            component="span"
-                            sx={{ fontStyle: 'italic', color: 'text.secondary', fontWeight: 400 }} // Estilo para N/A
-                        >
-                            No especificado
-                        </Typography>
-                    )}
-                </Typography>
+                {/* --- LÓGICA DE RENDERIZADO CORREGIDA --- */}
+                {valueComponent !== undefined ? ( // Si se proporciona valueComponent, úsalo
+                    valueComponent
+                ) : ( // Si no, usa la prop 'value' con el fallback
+                    <Typography
+                        variant={dense ? "body2" : "subtitle2"} // O el variant que prefieras
+                        component="div"
+                        sx={{ fontWeight: 500, lineHeight: 1.4, wordWrap: 'break-word' }}
+                    >
+                        {(value !== null && value !== undefined && value !== '') ? value : (
+                            <Typography
+                                variant={dense ? "body2" : "subtitle2"}
+                                component="span"
+                                sx={{ fontStyle: 'italic', color: 'text.secondary', fontWeight: 400 }}
+                            >
+                                No especificado
+                            </Typography>
+                        )}
+                    </Typography>
+                )}
+                {/* --- FIN LÓGICA CORREGIDA --- */}
             </Box>
         </Box>
     );
 };
 
 export default IconDetailItem;
-// ========================================================================
-// FIN: Contenido FINAL para frontend/src/components/IconDetailItem.tsx
-// ========================================================================
