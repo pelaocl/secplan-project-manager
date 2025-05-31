@@ -42,6 +42,17 @@ const FitBoundsToFeatures: React.FC<{
   return null;
 };
 
+const MapResizer: React.FC = () => {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100); // Pequeño delay para asegurar que el DOM está listo
+    return () => clearTimeout(timer);
+  }, [map]); // Se ejecuta cuando el mapa está disponible
+  return null;
+};
+
 const ProjectMap: React.FC<ProjectMapProps> = ({
   locationPoint,
   areaPolygon,
@@ -99,6 +110,7 @@ const ProjectMap: React.FC<ProjectMapProps> = ({
       
       {/* Componente para ajustar el zoom a las geometrías */}
       <FitBoundsToFeatures geoJsonLayer={geoJsonLayer} point={locationPoint} />
+      <MapResizer />
     </MapContainer>
   );
 };

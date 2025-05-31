@@ -1,8 +1,8 @@
 // frontend/src/pages/ProjectDetailPage.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom'; // Renombrado Link a RouterLink
 import {
-    Container, Box, Typography, CircularProgress, Alert, Paper, Grid, Chip, Divider, Button, Stack, Tooltip, IconButton, useTheme, List
+    Container, Box, Typography, CircularProgress, Alert, Paper, Grid, Chip, Divider, Button, Stack, Tooltip, IconButton, useTheme, List, ListItemButton, ListItemIcon, ListItemText, Collapse, Hidden, useMediaQuery
 } from '@mui/material';
 
 // --- Iconos ---
@@ -11,8 +11,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PrintIcon from '@mui/icons-material/Print';
 import BusinessIcon from '@mui/icons-material/Business';
 import CategoryIcon from '@mui/icons-material/Category';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'; // Usado para Estado Actual
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // Usado para Año
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import SquareFootIcon from '@mui/icons-material/SquareFoot';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
@@ -20,37 +20,44 @@ import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import PersonIcon from '@mui/icons-material/Person';
 import GroupsIcon from '@mui/icons-material/Groups';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import FolderZipIcon from '@mui/icons-material/FolderZip';
-import StairsIcon from '@mui/icons-material/Stairs';
-import ArticleIcon from '@mui/icons-material/Article';
-import EventIcon from '@mui/icons-material/Event';
-import HistoryIcon from '@mui/icons-material/History';
-import TravelExploreIcon from '@mui/icons-material/TravelExplore';
+import FolderZipIcon from '@mui/icons-material/FolderZip'; // Usado para Código Expediente, Licitación
+import StairsIcon from '@mui/icons-material/Stairs'; // Usado para Etapa Actual
+import ArticleIcon from '@mui/icons-material/Article'; // Usado para Programa, Línea Financ.
+import EventIcon from '@mui/icons-material/Event'; // Usado para Fecha Postulación
+import HistoryIcon from '@mui/icons-material/History'; // Usado para Fecha Creación/Modificación
+import TravelExploreIcon from '@mui/icons-material/TravelExplore'; // Usado para Sector
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import VpnKeyIcon from '@mui/icons-material/VpnKey'; // Para Código Único
+import UpdateIcon from '@mui/icons-material/Update'; // Para Última Modificación
+import DescriptionIcon from '@mui/icons-material/Description'; // Para Descripción del Proyecto (menú)
+import ListAltIcon from '@mui/icons-material/ListAlt'; // Para Tareas (menú)
+import InfoIcon from '@mui/icons-material/Info'; // Para Información Básica (menú)
+import MyLocationIcon from '@mui/icons-material/MyLocation'; // Para Ubicación y Superficie (menú)
+import ImageIcon from '@mui/icons-material/Image'; // Para placeholder de imagen del proyecto
 
 // --- Servicios y Tipos ---
 import { projectApi } from '../services/projectApi';
 import { taskApi } from '../services/taskApi';
-import { lookupApi } from '../services/lookupApi'; 
-import { 
-    Project, 
-    TipoMoneda, 
-    Task, 
+import { lookupApi } from '../services/lookupApi';
+import {
+    Project,
+    TipoMoneda,
+    Task,
     EstadoTarea,
-    PrioridadTarea,
-    FormOptionsResponse, 
+    // PrioridadTarea, // No se usa directamente aquí, sino en TaskListItem
+    FormOptionsResponse,
     CreateTaskFrontendInput,
     UpdateTaskFrontendInput,
     TaskFormValues,
-    ChatMessage, 
-    UserProjectTeamMember 
+    // ChatMessage, // No se usa directamente aquí
+    // UserProjectTeamMember // Se accede a través de project.proyectista, etc.
 } from '../types';
 import ProjectMap from '../components/ProjectMap';
 import IconDetailItem from '../components/IconDetailItem';
-import SectionPaper from '../components/layout/SectionPaper';
+// SectionPaper ya no se usará como wrapper principal de secciones
 import { ApiError } from '../services/apiService';
-import { useAuthStore, useIsAuthenticated, useCurrentUserRole } from '../store/authStore';
-import TaskListItem from '../components/TaskListItem'; 
+import { useAuthStore, useIsAuthenticated, useCurrentUserRole, useCurrentUser } from '../store/authStore'; // Añadido useCurrentUser
+import TaskListItem from '../components/TaskListItem';
 import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import { useForm, FormProvider, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -60,16 +67,20 @@ import { Snackbar } from '@mui/material';
 import TaskDetailModal from '../components/TaskDetailModal';
 import { socketService } from '../services/socketService';
 
-// --- Helper Functions ---
+// --- Helper Functions (sin cambios) ---
 const formatCurrency = (value: string | number | null | undefined | { toNumber: () => number }, currency: TipoMoneda = 'CLP'): string => { let numericValue: number | null = null; if (value == null) numericValue = null; else if (typeof value === 'object' && value && typeof value.toNumber === 'function') numericValue = value.toNumber(); else { const num = Number(String(value).replace(',', '.')); if (!isNaN(num)) numericValue = num; } if (numericValue === null) return 'N/A'; try { return new Intl.NumberFormat('es-CL', { style: 'currency', currency: currency === 'UF' ? 'CLF' : 'CLP', minimumFractionDigits: currency === 'UF' ? 2 : 0, maximumFractionDigits: currency === 'UF' ? 4 : 0, }).format(numericValue); } catch (e) { console.error("Error formatting currency:", e); return `${currency === 'UF' ? 'UF' : '$'} ${numericValue.toLocaleString('es-CL')}`; } };
 const formatDate = (dateString: string | Date | null | undefined): string => { if (!dateString) return 'N/A'; try { const date = (dateString instanceof Date) ? dateString : new Date(dateString); if (isNaN(date.getTime())) return 'Fecha inválida'; return date.toLocaleDateString('es-CL', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { console.error("Error formatting date:", e); return 'Fecha inválida'; } };
 // -------------------------------------
+
+// Definición de las secciones para el menú y contenido
+type ProjectSection = 'tareas' | 'descripcion' | 'infoBasica' | 'ubicacion';
 
 function ProjectDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const theme = useTheme();
-    
+    const isSmallScreen = useMediaQuery(theme.breakpoints.down('md')); // Para responsividad del menú
+
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [lookupOptions, setLookupOptions] = useState<FormOptionsResponse | null>(null);
@@ -77,7 +88,7 @@ function ProjectDetailPage() {
     const [loadingProject, setLoadingProject] = useState<boolean>(true);
     const [loadingTasks, setLoadingTasks] = useState<boolean>(false);
     const [loadingLookups, setLoadingLookups] = useState<boolean>(false);
-    
+
     const [errorProject, setErrorProject] = useState<string | null>(null);
     const [errorTasks, setErrorTasks] = useState<string | null>(null);
 
@@ -92,329 +103,605 @@ function ProjectDetailPage() {
     const [isTaskDetailModalOpen, setIsTaskDetailModalOpen] = useState(false);
     const [loadingTaskDetail, setLoadingTaskDetail] = useState<boolean>(false);
     const [taskDetailErrorState, setTaskDetailErrorState] = useState<string | null>(null);
-    
+
     const isAuthenticated = useIsAuthenticated();
     const userRole = useCurrentUserRole();
-    const currentUser = useAuthStore((state) => state.user);
+    const currentUser = useCurrentUser(); // Usar el hook importado
     const projectIdNum = id ? parseInt(id, 10) : NaN;
+
+    // Estado para la sección activa en el panel derecho
+    const [activeSection, setActiveSection] = useState<ProjectSection>('infoBasica');
+    const [hasSetInitialSection, setHasSetInitialSection] = useState<boolean>(false);
+
+    // Estado para el filtro de tareas
+    const [taskFilter, setTaskFilter] = useState<'all' | 'mine'>('all');
+
 
     const taskFormMethods = useForm<TaskFormValues>({
         resolver: zodResolver(taskFormSchema),
         defaultValues: {
-            titulo: '', descripcion: null, asignadoId: null, 
+            titulo: '', descripcion: null, asignadoId: null,
             fechaPlazo: null, prioridad: null, estado: EstadoTarea.PENDIENTE,
         }
     });
 
+    // --- Lógica de carga de datos (loadPageData, useEffects) - Sin cambios en su lógica interna ---
+    // (Se asume que esta parte es robusta y funciona como antes)
     const loadPageData = useCallback(async (isFullLoad: boolean = true) => {
         if (isNaN(projectIdNum)) {
             setErrorProject("ID de proyecto inválido.");
-            setLoadingProject(false); 
-            setLoadingTasks(false);
-            setLoadingLookups(false);
+            setLoadingProject(false); setLoadingTasks(false); setLoadingLookups(false);
             return;
         }
-    
-        console.log(`[ProjectDetailPage] loadPageData - isFullLoad: ${isFullLoad}, projectId: ${projectIdNum}, Auth: ${isAuthenticated}`);
-    
         if (isFullLoad) {
-            setLoadingProject(true); 
-            setErrorProject(null); 
-            if (isAuthenticated) { // Solo activar loader de lookups si se van a pedir
-                setLoadingLookups(true);
-            }
+            setLoadingProject(true); setErrorProject(null);
+            if (isAuthenticated) { setLoadingLookups(true); }
         }
-        // Activar loader de tareas si está autenticado y vamos a pedirlas
-        if (isAuthenticated && (isFullLoad || !isFullLoad /*para el caso de refresh de tareas*/)) {
-            setLoadingTasks(true); 
-            setErrorTasks(null);
+        if (isAuthenticated && (isFullLoad || !isFullLoad)) {
+            setLoadingTasks(true); setErrorTasks(null);
         } else if (!isAuthenticated) {
-            // Limpiar y desactivar loaders si no está autenticado
-            setTasks([]); 
-            setLookupOptions(null);
-            setLoadingTasks(false); 
-            setLoadingLookups(false);
+            setTasks([]); setLookupOptions(null);
+            setLoadingTasks(false); setLoadingLookups(false);
         }
-    
         try {
-            // 1. Cargar/Recargar Proyecto si es full load o si aún no existe en el estado.
-            // 'project' (el estado) no es una dependencia de este useCallback, se accede a su valor actual.
-            if (isFullLoad) { // En una carga completa, siempre intentamos obtener el proyecto
-                console.log(`[ProjectDetailPage] Cargando detalles del proyecto ID: ${projectIdNum}`);
+            if (isFullLoad) {
                 const fetchedProject = await projectApi.getProjectById(projectIdNum, currentUser?.id);
                 setProject(fetchedProject);
+                 // Por defecto, si el usuario es guest y hay imagen, mostrarla, si no, info básica.
+                 // Si es autenticado, podríamos dirigirlo a 'tareas' o 'descripción' si es más relevante,
+                 // pero 'infoBasica' es un buen default general.
+                setActiveSection('infoBasica');
             }
-    
-            // 2. Si está autenticado, cargar/recargar tareas y (solo si es necesario) lookupOptions
             if (isAuthenticated) {
-                if (isFullLoad) { // Carga completa para usuario autenticado
+                if (isFullLoad) {
                     const [fetchedTasks, fetchedLookups] = await Promise.all([
                         taskApi.getTasksByProjectId(projectIdNum),
-                        lookupApi.getFormOptions() // Solo en full load
+                        lookupApi.getFormOptions()
                     ]);
                     setTasks(fetchedTasks);
                     setLookupOptions(fetchedLookups);
-                } else { // Carga parcial (solo tareas) para usuario autenticado
-                    console.log(`[ProjectDetailPage] Recargando solo tareas para proyecto ID: ${projectIdNum}`);
+                } else {
                     const fetchedTasks = await taskApi.getTasksByProjectId(projectIdNum);
                     setTasks(fetchedTasks);
                 }
             } else if (isFullLoad && !isAuthenticated) {
-                 // Si es carga completa pero no está autenticado, solo necesitamos el proyecto (ya cargado arriba)
-                 // Aseguramos que tasks y lookups estén vacíos/null
-                 setTasks([]);
-                 setLookupOptions(null);
+                setTasks([]);
+                setLookupOptions(null);
             }
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Ocurrió un error al cargar datos.";
-            console.error("[ProjectDetailPage] Error en loadPageData:", errorMessage);
-            if (err instanceof ApiError && err.data) console.error("[ProjectDetailPage] ApiError data:", JSON.stringify(err.data, null, 2));
-    
-            if (isFullLoad) setErrorProject(errorMessage); // Si falla full load, error de proyecto
-            if (isAuthenticated) setErrorTasks(errorMessage); // Si auth y falla (tareas o lookups), error de tareas
+            if (isFullLoad) setErrorProject(errorMessage);
+            if (isAuthenticated) setErrorTasks(errorMessage);
         } finally {
-            setLoadingProject(false); 
-            if (isAuthenticated) { 
-                setLoadingTasks(false); 
-                setLoadingLookups(false); 
-            }
+            setLoadingProject(false);
+            if (isAuthenticated) { setLoadingTasks(false); setLoadingLookups(false); }
         }
-    // Dependencias CLAVE: Estas harán que loadPageData se re-memoice solo si cambian.
-    // No incluir 'project', 'tasks', 'lookupOptions' que son establecidos por esta función.
-    }, [projectIdNum, isAuthenticated, currentUser?.id]); 
+    }, [projectIdNum, isAuthenticated, currentUser?.id]);
 
     useEffect(() => {
         if (projectIdNum) {
-            console.log(`[ProjectDetailPage] useEffect[projectIdNum, isAuthenticated, loadPageData]: Carga completa disparada. ID: ${projectIdNum}, Auth: ${isAuthenticated}`);
-            loadPageData(true); // Carga completa
+            setHasSetInitialSection(false);
+            loadPageData(true);
         } else {
-            // Limpiar estados si no hay projectIdNum (ej. el usuario navega fuera o ID es inválido)
-            setProject(null);
-            setTasks([]);
-            setLookupOptions(null);
+            setProject(null); setTasks([]); setLookupOptions(null);
             setErrorProject("ID de proyecto no especificado.");
-            setLoadingProject(false); setLoadingTasks(false); setLoadingLookups(false);
+            setLoadingProject(false); 
+            setLoadingTasks(false); 
+            setLoadingLookups(false);
+            setHasSetInitialSection(true);
         }
-    // Este efecto se ejecuta si projectIdNum cambia, o si isAuthenticated cambia (porque loadPageData cambiará su referencia)
-    }, [projectIdNum, isAuthenticated, loadPageData]); 
+    }, [projectIdNum, isAuthenticated, loadPageData]);
 
     useEffect(() => {
-        if (!isAuthenticated || !socketService.getSocket() || !currentUser?.id || !project) {
-            // console.log("[ProjectDetailPage] Socket useEffect: Condiciones no cumplidas para suscribir.");
-            return;
+        // Solo actuar si:
+        // 1. Tenemos datos del proyecto (`project` no es null).
+        // 2. No hay error cargando el proyecto.
+        // 3. El proyecto ya terminó de cargar (`!loadingProject`).
+        // 4. Aún no hemos establecido la sección inicial (`!hasSetInitialSection`).
+        if (project && !errorProject && !loadingProject && !hasSetInitialSection) {
+            // La condición para "acceso a la bitácora de tareas" es si el usuario está autenticado,
+            // ya que así se define si el ítem "Tareas" aparece en el menú.
+            if (isAuthenticated) {
+                setActiveSection('tareas'); // Para usuarios autenticados
+            } else {
+                setActiveSection('infoBasica'); // Para usuarios no autenticados (invitados)
+            }
+            setHasSetInitialSection(true); // Marcar que la sección inicial ya fue establecida
         }
-        // Asegurar que los listeners solo se apliquen al proyecto actual que se está viendo
-        if (project.id !== projectIdNum) {
-            // console.log(`[ProjectDetailPage] Socket useEffect: project.id (<span class="math-inline">\{project\.id\}\) no coincide con projectIdNum \(</span>{projectIdNum}). No suscribiendo.`);
-            return;
-        }
-    
+    }, [project, errorProject, loadingProject, isAuthenticated, hasSetInitialSection, setActiveSection, setHasSetInitialSection]);
+
+    useEffect(() => {
+        if (!isAuthenticated || !socketService.getSocket() || !currentUser?.id || !project) return;
+        if (project.id !== projectIdNum) return;
+
         const handleTaskChatStatusUpdate = (data: { taskId: number; tieneMensajesNuevosEnChat: boolean }) => {
-            // Solo actualiza si la tarea pertenece al proyecto actual
-            if (tasks.find(t => t.id === data.taskId && t.proyectoId === project.id)) { // find es más eficiente que some si luego usas map
-                console.log('[ProjectDetailPage] Evento task_chat_status_updated recibido:', data);
-                setTasks(currentTasks => 
-                    currentTasks.map(t => 
-                        t.id === data.taskId 
-                        ? { ...t, tieneMensajesNuevosEnChat: data.tieneMensajesNuevosEnChat } 
-                        : t
+            if (tasks.find(t => t.id === data.taskId && t.proyectoId === project.id)) {
+                setTasks(currentTasks =>
+                    currentTasks.map(t =>
+                        t.id === data.taskId
+                            ? { ...t, tieneMensajesNuevosEnChat: data.tieneMensajesNuevosEnChat }
+                            : t
                     )
                 );
             }
         };
-    
-        const handleGlobalNotificationUpdate = (eventData?: {count: number}) => {
-            console.log(`[ProjectDetailPage] Evento 'unread_count_updated' recibido por proyecto ${project.id}. Recargando lista de tareas (parcial). Data:`, eventData);
-            loadPageData(false); // Llama a recargar solo tareas
+        const handleGlobalNotificationUpdate = () => {
+            loadPageData(false); // Recargar solo tareas
         };
-    
-        console.log(`[ProjectDetailPage] Socket: Suscribiendo listeners para proyecto ${project.id}`);
         socketService.on('task_chat_status_updated', handleTaskChatStatusUpdate);
         socketService.on('unread_count_updated', handleGlobalNotificationUpdate);
-    
         return () => {
-            console.log(`[ProjectDetailPage] Socket: Limpiando listeners para proyecto ${project.id}`);
             const socket = socketService.getSocket();
             if (socket) {
                 socket.off('task_chat_status_updated', handleTaskChatStatusUpdate);
                 socket.off('unread_count_updated', handleGlobalNotificationUpdate);
             }
         };
-    // Dependencias clave: si cambian, se re-suscribe a los eventos.
-    // setTasks es estable. loadPageData cambia si projectIdNum o isAuthenticated cambian.
-    // 'tasks' se incluye porque handleTaskChatStatusUpdate lo lee para la condición .some().
     }, [isAuthenticated, currentUser?.id, project, projectIdNum, tasks, setTasks, loadPageData]);
 
+
+    // --- Handlers para acciones (sin cambios en su lógica interna) ---
     const handlePrint = () => { console.log("TODO: Imprimir ficha ID:", project?.id); alert("Impresión no implementada."); };
     const handleOpenNewTaskModal = () => { taskFormMethods.reset({ titulo: '', descripcion: null, asignadoId: null, fechaPlazo: null, prioridad: null, estado: EstadoTarea.PENDIENTE, }); setTaskFormError(null); setIsNewTaskModalOpen(true); };
     const handleCloseNewTaskModal = () => { setIsNewTaskModalOpen(false); };
-    const onNewTaskSubmit: SubmitHandler<TaskFormValues> = async (data) => { if (!project || isNaN(projectIdNum) || !isAuthenticated) return; setIsSubmittingTask(true); setTaskFormError(null); try { const dataToSubmit: CreateTaskFrontendInput = { ...data, fechaPlazo: data.fechaPlazo ? new Date(data.fechaPlazo).toISOString() : null, }; await taskApi.createTask(project.id, dataToSubmit); setSnackbarMessage("¡Tarea creada exitosamente!"); handleCloseNewTaskModal(); loadPageData(false); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al crear la tarea."; console.error("[ProjectDetailPage] Error creando tarea:", errorMsg); setTaskFormError(errorMsg); } finally { setIsSubmittingTask(false); } };
+    const onNewTaskSubmit: SubmitHandler<TaskFormValues> = async (data) => { if (!project || isNaN(projectIdNum) || !isAuthenticated) return; setIsSubmittingTask(true); setTaskFormError(null); try { const dataToSubmit: CreateTaskFrontendInput = { ...data, fechaPlazo: data.fechaPlazo ? new Date(data.fechaPlazo).toISOString() : null, }; await taskApi.createTask(project.id, dataToSubmit); setSnackbarMessage("¡Tarea creada exitosamente!"); handleCloseNewTaskModal(); loadPageData(false); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al crear la tarea."; setTaskFormError(errorMsg); } finally { setIsSubmittingTask(false); } };
     const handleOpenEditTaskModal = async (taskToEdit: Task) => { if (!project || !lookupOptions || !isAuthenticated) return; setLoadingTaskDetail(true); try { const freshTask = await taskApi.getTaskById(project.id, taskToEdit.id); taskFormMethods.reset({ titulo: freshTask.titulo, descripcion: freshTask.descripcion || null, asignadoId: freshTask.asignadoId || null, fechaPlazo: freshTask.fechaPlazo ? new Date(freshTask.fechaPlazo) : null, prioridad: freshTask.prioridad || null, estado: freshTask.estado, }); setEditingTask(freshTask); setIsEditTaskModalOpen(true); setTaskFormError(null); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al cargar tarea para editar."; setSnackbarMessage(errorMsg); } finally { setLoadingTaskDetail(false); } };
     const handleCloseEditTaskModal = () => { setIsEditTaskModalOpen(false); setEditingTask(null); };
-    const onEditTaskSubmit: SubmitHandler<TaskFormValues> = async (data) => { if (!project || !editingTask || !isAuthenticated) return; setIsSubmittingTask(true); setTaskFormError(null); try { const dataToSubmit: UpdateTaskFrontendInput = { ...data, fechaPlazo: data.fechaPlazo ? new Date(data.fechaPlazo).toISOString() : null, }; await taskApi.updateTask(project.id, editingTask.id, dataToSubmit); setSnackbarMessage("¡Tarea actualizada exitosamente!"); handleCloseEditTaskModal(); loadPageData(false); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al actualizar la tarea."; console.error("[ProjectDetailPage] Error actualizando tarea:", errorMsg); setTaskFormError(errorMsg); } finally { setIsSubmittingTask(false); } };
+    const onEditTaskSubmit: SubmitHandler<TaskFormValues> = async (data) => { if (!project || !editingTask || !isAuthenticated) return; setIsSubmittingTask(true); setTaskFormError(null); try { const dataToSubmit: UpdateTaskFrontendInput = { ...data, fechaPlazo: data.fechaPlazo ? new Date(data.fechaPlazo).toISOString() : null, }; await taskApi.updateTask(project.id, editingTask.id, dataToSubmit); setSnackbarMessage("¡Tarea actualizada exitosamente!"); handleCloseEditTaskModal(); loadPageData(false); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al actualizar la tarea."; setTaskFormError(errorMsg); } finally { setIsSubmittingTask(false); } };
     const handleDeleteTask = (taskId: number) => { console.log(`TODO: Confirmar para eliminar tarea ID: ${taskId} del proyecto ${projectIdNum}`); alert(`Eliminar tarea ${taskId} - Pendiente confirmación`); };
     const handleViewTaskDetails = async (taskId: number) => { if (!project || isNaN(projectIdNum) || !isAuthenticated) return; setLoadingTaskDetail(true); setTaskDetailErrorState(null); try { const detailedTask = await taskApi.getTaskById(projectIdNum, taskId); setSelectedTaskForDetail(detailedTask); setIsTaskDetailModalOpen(true); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al cargar detalles."; setTaskDetailErrorState(errorMsg); setSnackbarMessage(errorMsg); } finally { setLoadingTaskDetail(false); } };
+    
 
-    // --- Lógica de Renderizado Principal ---
-    // Primero los loaders y errores que impiden mostrar cualquier cosa del proyecto
-    if (loadingProject && !project && !errorProject) { 
-        return ( <Box display="flex" justifyContent="center" alignItems="center" sx={{ mt: 4, height: '70vh' }}><CircularProgress /><Typography sx={{ ml: 2 }}>Cargando proyecto...</Typography></Box> ); 
+    // --- Estados de Carga y Error Globales ---
+    if (loadingProject && !project && !errorProject) {
+        return ( <Box display="flex" justifyContent="center" alignItems="center" sx={{ mt: 4, height: '70vh' }}><CircularProgress /><Typography sx={{ ml: 2 }}>Cargando proyecto...</Typography></Box> );
     }
-    if (errorProject && !project) { 
-        return ( <Container maxWidth="md"><Alert severity="error" sx={{ mt: 4 }}>{errorProject}</Alert><Button startIcon={<ArrowBackIcon />} sx={{mt: 2}} onClick={() => navigate('/')}> Volver al Listado </Button></Container> ); 
+    if (errorProject && !project) {
+        return ( <Container maxWidth="md"><Alert severity="error" sx={{ mt: 4 }}>{errorProject}</Alert><Button startIcon={<ArrowBackIcon />} sx={{ mt: 2 }} onClick={() => navigate('/')}> Volver al Listado </Button></Container> );
     }
-    if (!project) { // Si después de cargar, project sigue siendo null (y no hay errorProject explícito)
-        return ( <Container maxWidth="md"><Typography sx={{ mt: 4 }}>No se encontró el proyecto o ID inválido.</Typography><Button startIcon={<ArrowBackIcon />} sx={{mt: 2}} onClick={() => navigate('/')}> Volver al Listado </Button></Container> ); 
+    if (!project) {
+        return ( <Container maxWidth="md"><Typography sx={{ mt: 4 }}>No se encontró el proyecto o ID inválido.</Typography><Button startIcon={<ArrowBackIcon />} sx={{ mt: 2 }} onClick={() => navigate('/')}> Volver al Listado </Button></Container> );
     }
 
-    // --- DEFINICIÓN DE VARIABLES PARA CONDICIONALES JSX (AHORA QUE 'project' EXISTE) ---
+    // --- Variables de Permisos y Visibilidad (ahora que 'project' existe) ---
+    const canManageProject = isAuthenticated && (userRole === 'ADMIN' || userRole === 'COORDINADOR' || project.proyectistaId === currentUser?.id);
     const canManageTasks = isAuthenticated && (userRole === 'ADMIN' || userRole === 'COORDINADOR');
-    const showBitacoraSection = isAuthenticated && lookupOptions && !errorTasks;
+    const showTasksSectionInMenu = isAuthenticated; // Tareas solo visibles si está autenticado
+    
+    // Filtrado de tareas para la sección "Tareas"
+    const filteredTasks = tasks.filter(task => {
+        if (taskFilter === 'mine') {
+            return task.asignadoId === currentUser?.id || task.creadorId === currentUser?.id;
+        }
+        return true;
+    });
 
-    // Usamos 'project.' aquí porque ya hemos pasado los guards que aseguran que 'project' no es null
-    const showInternalFinancialDetails = isAuthenticated && 
-        (project.montoAdjudicado !== undefined || 
-         project.codigoExpediente !== undefined || 
-         project.codigoLicitacion !== undefined || 
-         project.fechaPostulacion !== undefined);
+    // --- NUEVA ESTRUCTURA DE RENDERIZADO ---
+    const TopBar = (
+        <Box
+            sx={{
+                p: 1.5, // Padding interno del TopBar
+                position: 'sticky',
+                top: 0,
+                zIndex: theme.zIndex.appBar,
+                // ESTA ES LA LÍNEA QUE PROBABLEMENTE QUIERES ELIMINAR O MODIFICAR:
+                borderBottom: `1px solid ${theme.palette.divider}`, 
+            }}
+        >
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Tooltip title="Volver al listado">
+                    <IconButton onClick={() => navigate('/')} sx={{ color: 'text.secondary' /* o 'primary.main' o 'action.active' */ }}>
+                        <ArrowBackIcon />
+                    </IconButton>
+                </Tooltip>
+                <Typography
+                    variant={isSmallScreen ? "h6" : "h5"}
+                    component="h1"
+                    sx={{
+                        fontWeight: 'bold',
+                        textAlign: 'left',
+                        textTransform: 'uppercase',
+                        color: 'primary.main',
+                        flexGrow: 1,                // Mantenemos flexGrow para que ocupe el espacio disponible
+                        ml: 1,                      // Margen izquierdo para separarlo un poco del botón "Volver"
+                        mr: 2,                      // Margen derecho para separarlo de los botones de acción
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                    }}
+                    title={project.nombre.toUpperCase()} // También puedes poner el title en mayúsculas
+                >
+                    {project.nombre} 
+                    {/* El textTransform en sx se encarga de la visualización, 
+                        pero no cambia el valor de project.nombre en sí */}
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                    <Tooltip title="Imprimir Ficha (Pendiente)">
+                        <Button 
+                            variant="outlined" 
+                            size="small"
+                            color="secondary"
+                            startIcon={<PrintIcon />} 
+                            onClick={handlePrint}
+                            //sx={{ 
+                            //    color: 'primary.contrastText', 
+                            //    borderColor: 'action.disabled',
+                            //    '&:hover': {
+                            //        backgroundColor: 'rgba(255,255,255,0.1)',
+                            //        borderColor: 'primary.contrastText',
+                            //    }
+                            //}}
+                        >
+                           {!isSmallScreen && "Imprimir"}
+                        </Button>
+                    </Tooltip>
+                    {canManageProject && (
+                        <Tooltip title="Editar Proyecto">
+                             <Button 
+                                component={RouterLink} // Usar RouterLink
+                                to={`/projects/${project.id}/edit`} 
+                                variant="contained" 
+                                size="small" 
+                                color="primary" // Un color que contraste
+                                startIcon={<EditIcon />}
+                                sx={{
+                                    // color: 'primary.main', bgcolor: 'secondary.main', '&:hover': { bgcolor: 'secondary.dark'}
+                                }}
+                            >
+                                {!isSmallScreen && "Editar"}
+                            </Button>
+                        </Tooltip>
+                    )}
+                </Stack>
+            </Box>
+            <Grid
+                container
+                spacing={isSmallScreen ? 0.5 : 1}
+                // Ajusta justifyContent según tu preferencia final (ej. 'space-between')
+                justifyContent={isSmallScreen ? "space-around" : "space-around"} 
+                alignItems="center"
+                sx={{
+                    // Aplicar el nuevo color terciario y su texto de contraste
+                    bgcolor: theme.palette.tertiary.main,
+                    color: theme.palette.tertiary.contrastText, 
+                    
+                    borderRadius: 2, // El redondeo se verá bien con un fondo
+                    py: 0.75,         // Padding vertical, puedes ajustarlo
+                    px: isSmallScreen ? 1 : 1.5, // Padding horizontal
+                    flexWrap: 'wrap',
+                    mt: 2, // Añadir un margen superior para separar de la fila del título
+                }}
+            >
+                {/* Para los IconDetailItem, necesitamos asegurar que su texto y iconos usen el contrastText */}
+                <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}> {/* flexGrow para que en xs ocupen mejor el espacio */}
+                    <IconDetailItem dense icon={VpnKeyIcon} label="Código" value={project.codigoUnico}
+                        sx={{
+                            // Sobrescribir colores internos de IconDetailItem para que usen el contrastText
+                            '& .MuiSvgIcon-root': { color: theme.palette.tertiary.contrastText, fontSize: '1rem' },
+                            '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 }, // Label
+                            '& .MuiTypography-subtitle2, & .MuiTypography-body2': { color: theme.palette.tertiary.contrastText } // Value
+                        }} />
+                </Grid>
+                <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}>
+                    <IconDetailItem dense icon={CalendarTodayIcon} label="Año" value={project.ano?.toString() || 'N/A'}
+                        sx={{
+                            '& .MuiSvgIcon-root': { color: theme.palette.tertiary.contrastText, fontSize: '1rem' },
+                            '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 },
+                            '& .MuiTypography-subtitle2, & .MuiTypography-body2': { color: theme.palette.tertiary.contrastText }
+                        }} />
+                </Grid>
+                <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}>
+                    <IconDetailItem dense icon={InfoOutlinedIcon} label="Estado" value={project.estado?.nombre || 'N/A'}
+                        sx={{
+                            '& .MuiSvgIcon-root': { color: theme.palette.tertiary.contrastText, fontSize: '1rem' },
+                            '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 },
+                            '& .MuiTypography-subtitle2, & .MuiTypography-body2': { color: theme.palette.tertiary.contrastText }
+                        }} />
+                </Grid>
+                <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}>
+                    <IconDetailItem dense icon={UpdateIcon} label="Últ. Modif." value={formatDate(project.updatedAt)}
+                        sx={{
+                            '& .MuiSvgIcon-root': { color: theme.palette.tertiary.contrastText, fontSize: '1rem' },
+                            '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 },
+                            '& .MuiTypography-subtitle2, & .MuiTypography-body2': { color: theme.palette.tertiary.contrastText }
+                        }} />
+                </Grid>
+            </Grid>
+        </Box>
+    );
 
-    const showFechasForGuest = !isAuthenticated && (project.createdAt || project.updatedAt);
+    const menuItems = [
+        { id: 'infoBasica' as ProjectSection, label: 'Información Básica', icon: <InfoIcon /> },
+        // El ítem 'Tareas' se añade condicionalmente aquí, después de 'Información Básica'
+        ...(showTasksSectionInMenu ? [{ id: 'tareas' as ProjectSection, label: 'Tareas', icon: <ListAltIcon /> }] : []),
+        { id: 'descripcion' as ProjectSection, label: 'Descripción del Proyecto', icon: <DescriptionIcon /> },
+        { id: 'ubicacion' as ProjectSection, label: 'Ubicación y Superficie', icon: <MyLocationIcon /> },
+    ];
 
-    const canRenderNewTaskModal = !!(isAuthenticated && lookupOptions && project && isNewTaskModalOpen);
-    const canRenderEditTaskModal = !!(isAuthenticated && lookupOptions && editingTask && project && isEditTaskModalOpen);
-    const canRenderTaskDetailModal = !!(isAuthenticated && selectedTaskForDetail && project && isTaskDetailModalOpen);
-    // --- FIN DEFINICIÓN DE VARIABLES ---
+    const LeftMenu = (
+        <Box
+            elevation={1}
+            square={isSmallScreen} // Aunque no se mostrará en small screens si está oculto
+            sx={{
+                width: 280, // Ancho fijo en pantallas grandes
+                position: 'sticky', // Para que se quede fijo al hacer scroll en la página
+                top: 125, // AJUSTA ESTO a la altura real de tu TopBar.
+                          // Esto hace que el menú se "pegue" después de que el TopBar haya pasado.
+                alignSelf: 'flex-start', // Necesario para que sticky funcione correctamente en un contenedor flex.
+                maxHeight: `calc(100vh - 135px)`, // Altura máxima = viewport - TopBar - un pequeño margen.
+                                                 // Esto es para que el menú TENGA SU PROPIO SCROLL si es muy largo.
+                overflowY: 'auto', // Scroll interno para el menú si excede maxHeight.
+                borderRight: `1px solid ${theme.palette.divider}`,
+                bgcolor: 'background.paper',
+                flexShrink: 0,
+                // En smallScreen, este componente no se renderiza en el layout de dos columnas,
+                // así que estas propiedades de sticky y maxHeight son para la vista de escritorio.
+            }}
+        >
+            <List component="nav" sx={{p: isSmallScreen ? 0.5 : 3}}>
+                {menuItems.map((item) => (
+                    <ListItemButton
+                        key={item.id}
+                        selected={activeSection === item.id}
+                        onClick={() => {
+                            if (!isSmallScreen) setActiveSection(item.id);
+                            // En small screen, el click podría hacer scroll a la sección si quisiéramos
+                        }}
+                        sx={{ 
+                            mb: 0.5,
+                            borderRadius: 1,
+                            '&.Mui-selected': {
+                                backgroundColor: 'primary.light', // Color más suave para seleccionado
+                                color: 'primary.contrastText',
+                                '& .MuiListItemIcon-root': {
+                                    color: 'primary.contrastText',
+                                },
+                                '&:hover': {
+                                    backgroundColor: 'primary.main',
+                                }
+                            },
+                             '&:hover': {
+                                backgroundColor: theme.palette.action.hover,
+                            }
+                        }}
+                    >
+                        <ListItemIcon sx={{minWidth: 36}}>{item.icon}</ListItemIcon>
+                        <ListItemText primary={item.label} primaryTypographyProps={{variant: 'subtitle2', fontWeight: activeSection === item.id && !isSmallScreen ? 'bold' : 'normal'}} />
+                    </ListItemButton>
+                ))}
+            </List>
+        </Box>
+    );
+
+    const renderSectionContent = (sectionId: ProjectSection) => {
+        switch (sectionId) {
+            case 'tareas':
+                if (!showTasksSectionInMenu) return null;
+                return (
+                    <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2 }}>
+                        {/* EL TÍTULO "Bitácora de Tareas" SE HA ELIMINADO.
+                            Este Box ahora contendrá los filtros a la izquierda y el botón "Nueva Tarea" a la derecha.
+                        */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                            {/* Contenedor para los botones de filtro (lado izquierdo) */}
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button 
+                                    variant={taskFilter === 'all' ? 'contained' : 'outlined'} 
+                                    onClick={() => setTaskFilter('all')} 
+                                    size="small"
+                                >
+                                    Todas
+                                </Button>
+                                <Button 
+                                    variant={taskFilter === 'mine' ? 'contained' : 'outlined'} 
+                                    onClick={() => setTaskFilter('mine')} 
+                                    size="small"
+                                >
+                                    Mis Tareas
+                                </Button>
+                            </Box>
+
+                            {/* Botón "Nueva Tarea" (lado derecho, condicional) */}
+                            {canManageTasks && ( 
+                                <Button 
+                                    variant="contained" 
+                                    color="primary" 
+                                    size="small" 
+                                    startIcon={<AddCircleOutlineIcon />} 
+                                    onClick={handleOpenNewTaskModal}
+                                >
+                                    Nueva Tarea
+                                </Button> 
+                            )}
+                        </Box>
+                        
+                        {/* El Box original solo para filtros ya no es necesario, se fusionó arriba. */}
+
+                        <Divider sx={{ mb: 2 }} />
+                        
+                        {/* Lógica para mostrar loaders, errores o la lista de tareas */}
+                        {loadingTasks && <Box sx={{display: 'flex', justifyContent: 'center', my: 3}}><CircularProgress size={24} /><Typography variant="caption" sx={{ml:1}}>Cargando tareas...</Typography></Box>}
+                        {errorTasks && <Alert severity="warning">No se pudo cargar la bitácora de tareas: {errorTasks}</Alert>}
+                        {!loadingTasks && !errorTasks && ( 
+                            filteredTasks.length > 0 ? ( 
+                                <List disablePadding>{filteredTasks.map((task) => ( <TaskListItem key={task.id} task={task} onViewDetails={() => handleViewTaskDetails(task.id)} onEditTask={handleOpenEditTaskModal} onDeleteTask={handleDeleteTask} />))}</List>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py: 2}}>No hay tareas registradas para el filtro actual.</Typography>
+                            )
+                        )}
+                    </Paper>
+                );
+            case 'descripcion':
+                return (
+                     <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2, minHeight: '300px' }}>
+                        <Typography variant="h5" component="h2" gutterBottom sx={{fontWeight: 'medium'}}>Descripción del Proyecto</Typography>
+                        <Divider sx={{ mb: 2 }} />
+                        {project.descripcion ? (
+                            <Box 
+                                className="tiptap-content-display" // Asegúrate que tus estilos globales para Tiptap se apliquen aquí
+                                sx={{ 
+                                    lineHeight: 1.7, 
+                                    '& h1': { my: theme.spacing(2.5), fontSize: '1.8rem', fontWeight: 500, borderBottom: `1px solid ${theme.palette.divider}`, pb: 1 }, 
+                                    '& h2': { my: theme.spacing(2), fontSize: '1.5rem', fontWeight: 500 }, 
+                                    '& h3': { my: theme.spacing(1.5), fontSize: '1.3rem', fontWeight: 500 }, 
+                                    '& p': { mb: theme.spacing(1.5) }, 
+                                    '& ul, & ol': { pl: theme.spacing(3), mb: theme.spacing(1.5) }, 
+                                    '& a': { color: theme.palette.primary.main, textDecoration: 'underline' }, 
+                                    '& img': { maxWidth: '100%', height: 'auto', my: theme.spacing(2), borderRadius: theme.shape.borderRadius, boxShadow: theme.shadows[3] } 
+                                }} 
+                                dangerouslySetInnerHTML={{ __html: project.descripcion }} 
+                            />
+                        ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py:2}}>No se ha proporcionado una descripción para este proyecto.</Typography>
+                        )}
+                    </Paper>
+                );
+            case 'infoBasica':
+                return (
+                     <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2 }}>
+                        
+                        <Box sx={{ mb: 3, borderRadius: 2, overflow: 'hidden', boxShadow: theme.shadows[3], minHeight: '300px', display:'flex', alignItems:'center', justifyContent:'center', background: theme.palette.grey[200] }}>
+                            {/* ASUMO que tendrás un campo 'project.imagenUrl' en tu tipo Project */}
+                            {project.imagenUrl ? (
+                                <img 
+                                    src={project.imagenUrl as string} // Casting si sabes que es string
+                                    alt={`Imagen de ${project.nombre}`} 
+                                    style={{ width: '100%', height: 'auto', maxHeight: '450px', display:'block', objectFit: 'contain' }} // 'contain' para ver toda la imagen
+                                />
+                            ) : project.location_point || project.area_polygon ? (
+                                <ProjectMap 
+                                    key={`map-for-${sectionId}`}
+                                    locationPoint={project.location_point} 
+                                    areaPolygon={project.area_polygon} 
+                                    mapHeight="400px" 
+                                />
+                            ) : (
+                                <Box sx={{textAlign: 'center', p:3, color: theme.palette.text.secondary}}>
+                                    <ImageIcon sx={{fontSize: 60, mb:1}}/>
+                                    <Typography>No hay imagen ni ubicación geográfica definida para este proyecto.</Typography>
+                                </Box>
+                            )}
+                        </Box>
+
+                        <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Detalles Generales</Typography>
+                        <Grid container spacing={2.5}>
+                            {project.unidad?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={BusinessIcon} label="Unidad Municipal" value={project.unidad.nombre} /> </Grid> }
+                            {project.tipologia?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CategoryIcon} label="Tipología" valueComponent={<Chip size="small" label={project.tipologia.nombre} sx={{bgcolor: project.tipologia.colorChip, color: theme.palette.getContrastText(project.tipologia.colorChip || theme.palette.primary.main)}} />} /> </Grid> }
+                            {project.programa?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa.nombre} /> </Grid>}
+                            {project.lineaFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Línea Financ." value={project.lineaFinanciamiento.nombre} /> </Grid>}
+                            {project.etapaActualFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={StairsIcon} label="Etapa Actual" value={project.etapaActualFinanciamiento.nombre} /> </Grid>}
+                            {project.monto != null && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Ref. (${project.tipoMoneda})`} value={formatCurrency(project.monto, project.tipoMoneda)} /> </Grid>}
+                            {project.proyectoPriorizado != null && <Grid item xs={12} sm={6} md={4}><IconDetailItem icon={project.proyectoPriorizado ? CheckBoxIcon : CheckBoxOutlineBlankIcon} label="Priorizado" value={project.proyectoPriorizado ? 'Sí' : 'No'} valueComponent={project.proyectoPriorizado ? <Chip size="small" label="Sí" color="success"/> : <Chip size="small" label="No"/>} /></Grid> }
+                            
+                            {isAuthenticated && project.proyectista && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Proyectista" value={`${project.proyectista.name || '?'} (${project.proyectista.email})`} /> </Grid>}
+                            {isAuthenticated && project.formulador && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Formulador" value={`${project.formulador.name || '?'} (${project.formulador.email})`} /> </Grid>}
+                            {isAuthenticated && project.colaboradores && project.colaboradores.length > 0 && ( <Grid item xs={12} md={4}> <IconDetailItem icon={GroupsIcon} label="Colaboradores" value={project.colaboradores.map(c => c.name || c.email).join(', ')} /> </Grid> )}
+                        </Grid>
+                        
+                        {isAuthenticated && (project.montoAdjudicado !== undefined || project.codigoExpediente || project.codigoLicitacion || project.fechaPostulacion) && (
+                            <>
+                                <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Detalles Financiamiento (Interno)</Typography>
+                                <Grid container spacing={2.5}>
+                                    {project.montoAdjudicado !== undefined && <Grid item xs={12} sm={6}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Adj. (${project.tipoMoneda})`} value={formatCurrency(project.montoAdjudicado, project.tipoMoneda)} /> </Grid> }
+                                    {project.codigoExpediente && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="Cód. Expediente" value={project.codigoExpediente} /> </Grid>}
+                                    {project.codigoLicitacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="ID Licitación" value={project.codigoLicitacion} /> </Grid>}
+                                    {project.fechaPostulacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={EventIcon} label="Fecha Postulación" value={formatDate(project.fechaPostulacion)} /> </Grid>}
+                                </Grid>
+                            </>
+                        )}
+                         <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Registro</Typography>
+                         <Grid container spacing={2.5}>
+                            <Grid item xs={12} sm={6}><IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /></Grid>
+                            <Grid item xs={12} sm={6}><IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /></Grid>
+                         </Grid>
+
+                    </Paper>
+                );
+            case 'ubicacion':
+                return (
+                    <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2, minHeight: '400px', position: 'relative' }}>
+                        <Box sx={{ height: isSmallScreen ? '350px' : '500px', borderRadius: 2, overflow: 'hidden', boxShadow: theme.shadows[2], mb: 2}}>
+                            <ProjectMap 
+                                key={`map-for-${sectionId}`}
+                                locationPoint={project.location_point} 
+                                areaPolygon={project.area_polygon}
+                                mapHeight="100%"
+                            />
+                        </Box>
+                        {/* Información flotante o debajo */}
+                        <Paper elevation={1} sx={{ p:1.5, borderRadius: 1.5, mt: -1, position:'relative', zIndex:1 /*Para que esté sobre la sombra del mapa si es necesario*/ }}>
+                            <Grid container spacing={2}>
+                                {project.sector?.nombre && <Grid item xs={12} sm={6} md={3}> <IconDetailItem dense icon={TravelExploreIcon} label="Sector" value={project.sector.nombre} /> </Grid>}
+                                {project.direccion && <Grid item xs={12} sm={6} md={3}> <IconDetailItem dense icon={LocationOnIcon} label="Dirección" value={project.direccion} /> </Grid>}
+                                {project.superficieTerreno != null && <Grid item xs={12} sm={6} md={3}> <IconDetailItem dense icon={SquareFootIcon} label="Sup. Terreno (m²)" value={project.superficieTerreno.toLocaleString('es-CL')} /> </Grid>}
+                                {project.superficieEdificacion != null && <Grid item xs={12} sm={6} md={3}> <IconDetailItem dense icon={SquareFootIcon} label="Sup. Edif. (m²)" value={project.superficieEdificacion.toLocaleString('es-CL')} /> </Grid>}
+                            </Grid>
+                        </Paper>
+                    </Paper>
+                );
+            default:
+                return <Alert severity="info">Selecciona una sección del menú.</Alert>;
+        }
+    };
+
+    const RightPanelContent = (
+        <Box
+            component="main"
+            sx={{
+                flexGrow: 1, // Ocupa el espacio restante horizontalmente en pantallas grandes
+                // Sin height fijo, sin overflowY: 'auto' aquí. El scroll será de la página.
+                width: '100%', // Para asegurar que en modo apilado ocupe el ancho.
+            }}
+        >
+            {isSmallScreen ? (
+                // En pantallas pequeñas, apilar todas las secciones
+                <Stack spacing={2} sx={{ p: 1.5 }}>
+                    {menuItems.map(item => (
+                        // Renderiza la sección solo si es visible según la lógica del menú (ej. tareas para auth)
+                        (item.id === 'tareas' && !showTasksSectionInMenu) ? null : (
+                            <Box key={item.id} id={`section-${item.id}`}>
+                                {renderSectionContent(item.id)}
+                            </Box>
+                        )
+                    ))}
+                </Stack>
+            ) : (
+                // En pantallas grandes, mostrar solo la sección activa
+                renderSectionContent(activeSection)
+            )}
+        </Box>
+    );
 
     return (
-        <Container maxWidth="lg" sx={{ mt: 2, mb: 4 }}>
-            {/* Banner */}
-            <Box sx={{ boxShadow: theme.shadows[3], height: { xs: '250px', sm: '300px', md: '350px' }, position: 'relative', overflow: 'hidden', mb: 3, borderRadius: theme.shape.borderRadius ? (theme.shape.borderRadius / 10) : '2px', }} >
-                <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}>
-                    <ProjectMap locationPoint={project.location_point} areaPolygon={project.area_polygon} />
-                </Box>
-                <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0) 100%)', borderRadius: 'inherit' }} />
-                <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3, p: { xs: 2, md: 3 }, color: 'common.white', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2 }}>
-                    <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', textShadow: '1px 1px 3px rgba(0,0,0,0.7)' }}>{project.nombre}</Typography>
-                    {project.tipologia && <Chip label={project.codigoUnico || '?'} size="medium" sx={{ backgroundColor: project.tipologia.colorChip || 'rgba(255,255,255,0.3)', color: '#fff', fontSize: '1.4rem', fontWeight: 'bold', textShadow: '1px 1px 1px rgba(0,0,0,0.4)', border: '3px solid rgba(255,255,255,1)', px: 2, py: 2.3 }} />}
-                </Box>
-                <Box sx={{ position: 'absolute', top: 0, left: theme.spacing(1), right: theme.spacing(1), zIndex: 3, p: { xs: 1, sm: 1.5 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Button variant="contained" size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/')} sx={{ backgroundColor: 'rgba(0, 0, 0, 0.45)', color: 'white', '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.65)' } }}>Volver</Button>
-                    <Stack direction="row" spacing={1}>
-                        {project && ( <Button variant="contained" size="small" startIcon={<PrintIcon />} onClick={handlePrint} sx={{ backgroundColor: 'rgba(255, 255, 255, 0.25)', color: 'rgba(50,50,50,1)', '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.5)' } }}>Imprimir</Button> )}
-                        {isAuthenticated && (project.proyectistaId === currentUser?.id || userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
-                            <Button component={Link} to={`/projects/${project.id}/edit`} variant="contained" size="small" color="primary" startIcon={<EditIcon />}>Editar</Button>
-                        )}
-                    </Stack>
-                </Box>
+        <Container
+            maxWidth="xl" // O el maxWidth que hayas elegido
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                //minHeight: '100vh', // Asegura que la página ocupe al menos el alto de la ventana
+                                   // pero puede crecer si el contenido es más largo.
+                //py: 2, // Padding vertical opcional para el Container, puedes quitarlo si TopBar maneja su propio padding.
+            }}
+        >
+        <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden'/* Prevenir doble scrollbar en body */}}>
+            {TopBar}
+            <Box sx={{
+                display: 'flex',
+                flexDirection: isSmallScreen ? 'column' : 'row', // Columna en pequeño, Fila en grande
+                // Ya no necesitamos overflow: 'hidden' aquí, el scroll será manejado por el navegador.
+            }}>
+                {!isSmallScreen && LeftMenu /* Mostrar menú lateral solo en pantallas grandes */}
+                {RightPanelContent /* El panel derecho (o contenido apilado) */}
             </Box>
 
-            <Grid container spacing={3}>
-                {/* Sección Bitácora de Tareas */}
-                {showBitacoraSection && (
-                    <Grid item xs={12} md={(project.descripcion) ? 12 : 12}>
-                        <SectionPaper elevation={2}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="h6" gutterBottom component="div">Bitácora de Tareas</Typography>
-                                {canManageTasks && ( <Button variant="contained" color="primary" size="small" startIcon={<AddCircleOutlineIcon />} onClick={handleOpenNewTaskModal}>Nueva Tarea</Button> )}
-                            </Box>
-                            <Divider sx={{ mb: 2 }} />
-                            {loadingTasks && <Box sx={{display: 'flex', justifyContent: 'center', my: 3}}><CircularProgress size={24} /><Typography variant="caption" sx={{ml:1}}>Cargando tareas...</Typography></Box>}
-                            {!loadingTasks && ( tasks.length > 0 ? ( <List disablePadding>{tasks.map((task) => ( <TaskListItem key={task.id} task={task} onViewDetails={() => handleViewTaskDetails(task.id)} onEditTask={handleOpenEditTaskModal} onDeleteTask={handleDeleteTask} />))}</List>) : (<Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py: 2}}>No hay tareas registradas.</Typography>))}
-                        </SectionPaper>
-                    </Grid>
-                )}
-                {isAuthenticated && errorTasks && !loadingTasks && !lookupOptions && ( 
-                     <Grid item xs={12} md={(project.descripcion && showBitacoraSection) ? 8 : 12}>
-                        <Alert severity="warning" sx={{width: '100%'}}>No se pudo cargar la bitácora de tareas: {errorTasks}</Alert>
-                    </Grid>
-                )}
-                
-                {/* Columna para Descripción del Proyecto */}
-                <Grid item xs={12} md={showBitacoraSection ? 12 : (project.descripcion ? 12 : 0) }>
-                    {project.descripcion && (
-                        <SectionPaper elevation={2} sx={{height: showBitacoraSection ? '100%' : 'auto' }}>
-                            <Typography variant="h6" gutterBottom>Descripción del Proyecto</Typography>
-                            <Divider sx={{ mb: 2 }} />
-                            <Box className="tiptap-content-display" sx={{ maxHeight: showBitacoraSection ? 'calc(80vh - 200px)' : 'none', overflowY: 'auto', lineHeight: 1.6, '& h1': { my: theme.spacing(2), fontSize: '1.6rem', fontWeight: 500 }, '& h2': { my: theme.spacing(1.5), fontSize: '1.4rem', fontWeight: 500 }, '& h3': { my: theme.spacing(1.2), fontSize: '1.2rem', fontWeight: 500 }, '& p': { mb: theme.spacing(1.5) }, '& ul, & ol': { pl: theme.spacing(3), mb: theme.spacing(1.5) }, '& a': { color: theme.palette.primary.main }, '& img': { maxWidth: '100%', height: 'auto', my: theme.spacing(1.5), borderRadius: theme.shape.borderRadius } }} dangerouslySetInnerHTML={{ __html: project.descripcion }} />
-                        </SectionPaper>
-                    )}
-                    {isAuthenticated && !project.descripcion && lookupOptions && !errorTasks && (
-                        <SectionPaper elevation={2} sx={{height: '100%'}}><Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py:2}}>No se ha proporcionado una descripción.</Typography></SectionPaper>
-                    )}
-                </Grid>
-                            
-                {/* Información Básica (Pública y condicionalmente interna) */}
-                <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Información Básica</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> 
-                    {project.unidad?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={BusinessIcon} label="Unidad Municipal" value={project.unidad.nombre} /> </Grid> }
-                    {project.tipologia?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CategoryIcon} label="Tipología" value={project.tipologia.nombre} /> </Grid> }
-                    {project.estado?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={InfoOutlinedIcon} label="Estado Actual" value={project.estado.nombre} /> </Grid> }
-                    {project.ano != null && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CalendarTodayIcon} label="Año Iniciativa" value={project.ano.toString()} /> </Grid>}
-                    {project.programa?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa.nombre} /> </Grid>}
-                    {project.lineaFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Línea Financ." value={project.lineaFinanciamiento.nombre} /> </Grid>}
-                    {project.etapaActualFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={StairsIcon} label="Etapa Actual" value={project.etapaActualFinanciamiento.nombre} /> </Grid>}
-                    {project.monto != null && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Ref. (${project.tipoMoneda})`} value={formatCurrency(project.monto, project.tipoMoneda)} /> </Grid>}
-                    {project.proyectoPriorizado != null && <Grid item xs={12} sm={6} md={4}><IconDetailItem icon={project.proyectoPriorizado ? CheckBoxIcon : CheckBoxOutlineBlankIcon} label="Priorizado" value={project.proyectoPriorizado ? 'Sí' : 'No'} /></Grid> }
-                    
-                    {isAuthenticated && project.proyectista && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Proyectista" value={`${project.proyectista.name || '?'} (${project.proyectista.email})`} /> </Grid>}
-                    {isAuthenticated && project.formulador && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Formulador" value={`${project.formulador.name || '?'} (${project.formulador.email})`} /> </Grid>}
-                    {isAuthenticated && project.colaboradores && project.colaboradores.length > 0 && ( <Grid item xs={12} md={4}> <IconDetailItem icon={GroupsIcon} label="Colaboradores" value={project.colaboradores.map(c => c.name || c.email).join(', ')} /> </Grid> )}
-                </Grid> </SectionPaper> </Grid>
-                
-                {/* Ubicación y Superficies (Pública) */}
-                <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Ubicación y Superficies</Typography> <Divider sx={{ mb: 2.5 }} /> <Grid container spacing={3} alignItems="flex-start"> 
-                    {project.sector?.nombre && <Grid item xs={12} md={6}> <IconDetailItem icon={TravelExploreIcon} label="Sector" value={project.sector.nombre} /> </Grid>}
-                    {project.superficieTerreno != null && <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Terreno (m²)" value={project.superficieTerreno.toLocaleString('es-CL')} /> </Grid>}
-                    {project.superficieEdificacion != null && <Grid item xs={12} md={6}> <IconDetailItem icon={SquareFootIcon} label="Sup. Edificación (m²)" value={project.superficieEdificacion.toLocaleString('es-CL')} /> </Grid>}
-                    {project.direccion && <Grid item xs={12} md={6}> <IconDetailItem icon={LocationOnIcon} label="Dirección" value={project.direccion} /> </Grid>}
-                </Grid></SectionPaper></Grid>
-                
-                {/* SECCIÓN FINANCIERA DETALLADA (Interna) Y FECHAS DE CREACIÓN/MOD (Públicas, pero aquí agrupadas para Autenticados) */}
-                {isAuthenticated && (showInternalFinancialDetails || project.createdAt || project.updatedAt) && ( 
-                    <>
-                        {showInternalFinancialDetails && (
-                            <Grid item xs={12} md={(project.createdAt || project.updatedAt) ? 8 : 12}> 
-                                <SectionPaper elevation={2} sx={{ height: '100%' }}> 
-                                    <Typography variant="h6" gutterBottom>Detalles Financiamiento (Interno)</Typography> 
-                                    <Divider sx={{ mb: 2.5 }} /> 
-                                    <Grid container spacing={3} alignItems="flex-start"> 
-                                        {project.montoAdjudicado !== undefined && <Grid item xs={12} sm={6}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Adj. (${project.tipoMoneda})`} value={formatCurrency(project.montoAdjudicado, project.tipoMoneda)} /> </Grid> }
-                                        {project.codigoExpediente && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="Cód. Expediente" value={project.codigoExpediente} /> </Grid>}
-                                        {project.codigoLicitacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="ID Licitación" value={project.codigoLicitacion} /> </Grid>}
-                                        {project.fechaPostulacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={EventIcon} label="Fecha Postulación" value={formatDate(project.fechaPostulacion)} /> </Grid>}
-                                    </Grid> 
-                                </SectionPaper> 
-                            </Grid>
-                        )}
-                        {(project.createdAt || project.updatedAt) && (
-                            <Grid item xs={12} md={showInternalFinancialDetails ? 4 : 12}> 
-                                <SectionPaper elevation={2} sx={{ height: '100%' }}> 
-                                    <Typography variant="h6" gutterBottom>Fechas Registro</Typography> <Divider sx={{ mb: 2.5 }} /> 
-                                    <Grid container spacing={3} alignItems="flex-start"> 
-                                        {project.createdAt && <Grid item xs={12}> <IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /> </Grid> }
-                                        {project.updatedAt && <Grid item xs={12}> <IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /> </Grid> }
-                                    </Grid> 
-                                </SectionPaper> 
-                            </Grid> 
-                        )}
-                    </> 
-                )}
-                {/* FECHAS PARA INVITADOS (Público, solo si no está autenticado) */}
-                {showFechasForGuest && ( 
-                    <Grid item xs={12}> <SectionPaper elevation={2}> <Typography variant="h6" gutterBottom>Fechas</Typography> <Divider sx={{ mb: 3 }} /> <Grid container spacing={3} alignItems="flex-start"> 
-                        {project.createdAt && <Grid item xs={12} md={6}> <IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /> </Grid>}
-                        {project.updatedAt && <Grid item xs={12} md={6}> <IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /> </Grid>}
-                    </Grid> </SectionPaper> </Grid> 
-                )}
-            </Grid>
-
-            {/* Modales */}
-            {canRenderNewTaskModal && (
+            {/* Modales (sin cambios en su lógica, solo en las condiciones de renderizado si cambian las variables) */}
+            {isAuthenticated && lookupOptions && project && isNewTaskModalOpen && (
                 <Dialog open={isNewTaskModalOpen} onClose={handleCloseNewTaskModal} maxWidth="md" fullWidth>
                     <DialogTitle>Crear Nueva Tarea para "{project!.nombre}"</DialogTitle>
                     <FormProvider {...taskFormMethods}>
                         <form onSubmit={taskFormMethods.handleSubmit(onNewTaskSubmit)}>
                             <DialogContent>
-                                <DialogContentText sx={{mb:2}}>Completa los detalles de la nueva tarea. La descripción puede incluir texto enriquecido.</DialogContentText>
+                                <DialogContentText sx={{mb:2}}>Completa los detalles de la nueva tarea.</DialogContentText>
                                 {taskFormError && <Alert severity="error" sx={{ mb: 2 }}>{taskFormError}</Alert>}
                                 <TaskForm isSubmitting={isSubmittingTask} lookupOptions={lookupOptions!} />
                             </DialogContent>
@@ -426,8 +713,8 @@ function ProjectDetailPage() {
                     </FormProvider>
                 </Dialog>
             )}
-            {canRenderEditTaskModal && (
-                <Dialog open={isEditTaskModalOpen} onClose={handleCloseEditTaskModal} maxWidth="md" fullWidth>
+            {isAuthenticated && lookupOptions && editingTask && project && isEditTaskModalOpen && (
+                 <Dialog open={isEditTaskModalOpen} onClose={handleCloseEditTaskModal} maxWidth="md" fullWidth>
                     <DialogTitle>Editar Tarea: "{editingTask!.titulo}"</DialogTitle>
                     <FormProvider {...taskFormMethods}>
                         <form onSubmit={taskFormMethods.handleSubmit(onEditTaskSubmit)}>
@@ -444,29 +731,29 @@ function ProjectDetailPage() {
                     </FormProvider>
                 </Dialog>
             )}
-            {canRenderTaskDetailModal && (
+            {isAuthenticated && selectedTaskForDetail && project && isTaskDetailModalOpen && (
                 <TaskDetailModal
                     task={selectedTaskForDetail!}
                     open={isTaskDetailModalOpen}
                     onClose={() => { setIsTaskDetailModalOpen(false); setSelectedTaskForDetail(null); }}
-                    // projectId={project.id} // Pasado para consistencia si TaskDetailModal lo necesita
                 />
             )}
-            <Snackbar 
-                open={!!snackbarMessage || !!taskDetailErrorState} 
-                autoHideDuration={6000} 
-                onClose={() => {setSnackbarMessage(null); setTaskDetailErrorState(null);}} 
+            <Snackbar
+                open={!!snackbarMessage || !!taskDetailErrorState}
+                autoHideDuration={6000}
+                onClose={() => {setSnackbarMessage(null); setTaskDetailErrorState(null);}}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
-                <Alert 
-                    onClose={() => {setSnackbarMessage(null); setTaskDetailErrorState(null);}} 
-                    severity={taskDetailErrorState ? "error" : (snackbarMessage && snackbarMessage.toLowerCase().includes("error") ? "error" : "success")} 
+                <Alert
+                    onClose={() => {setSnackbarMessage(null); setTaskDetailErrorState(null);}}
+                    severity={taskDetailErrorState ? "error" : (snackbarMessage && snackbarMessage.toLowerCase().includes("error") ? "error" : "success")}
                     variant="filled" sx={{ width: '100%' }}
                 >
                     {snackbarMessage || taskDetailErrorState}
                 </Alert>
             </Snackbar>
-        </Container>
+        </Box>
+    </Container>
     );
 }
 

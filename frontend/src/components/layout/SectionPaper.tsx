@@ -1,6 +1,5 @@
-// ========================================================================
-// INICIO: Contenido para frontend/src/components/layout/SectionPaper.tsx
-// ========================================================================
+
+//frontend/src/components/layout/SectionPaper.tsx
 import { styled } from '@mui/material/styles';
 import Paper, { PaperProps } from '@mui/material/Paper';
 
@@ -21,6 +20,3 @@ const SectionPaper = styled(Paper)<PaperProps>(({ theme }) => ({
 }));
 
 export default SectionPaper;
-// ========================================================================
-// FIN: Contenido para frontend/src/components/layout/SectionPaper.tsx
-// ========================================================================

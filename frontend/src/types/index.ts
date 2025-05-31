@@ -1,3 +1,4 @@
+//frontend/src/types/index.ts
 // Define roles basados en backend Role enum para consistencia en el frontend
 export type UserRole = 'ADMIN' | 'COORDINADOR' | 'USUARIO';
 
@@ -20,6 +21,7 @@ export interface Project {
   codigoUnico: string;
   nombre: string;
   descripcion: string | null; // Ahora siempre es público
+  imagenUrl?: string | null;
   direccion: string | null;
   superficieTerreno: number | null; // Prisma Decimal se convierte a number o string en JSON, ajusta si es string
   superficieEdificacion: number | null; // Prisma Decimal se convierte a number o string
