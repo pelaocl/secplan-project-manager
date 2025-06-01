@@ -1,62 +1,107 @@
-// CORREGIDO: Importa Prisma junto con PrismaClient y los Enums
-import { PrismaClient, Role, TipoMoneda, Prisma } from '@prisma/client';
+// backend/prisma/seed.ts
+import { PrismaClient, Role, TipoMoneda, Prisma, EstadoTarea } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+// Helper para seleccionar un elemento aleatorio de un array
+function randomElement<T>(arr: T[]): T | undefined {
+  if (!arr || arr.length === 0) return undefined;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Helper para generar un número aleatorio en un rango
+function randomNumber(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
 async function main() {
   console.log('Start seeding ...');
 
   // --- Clean existing data (optional, useful for development) ---
   console.log('Deleting existing data...');
-  await prisma.tarea.deleteMany(); // Borrar dependientes primero
-  // Desconectar FKs opcionales en Project antes de borrar Users
-  await prisma.project.updateMany({ data: { proyectistaId: null, formuladorId: null }});
-  // Eliminadas líneas updateMany para relaciones M2M que fallaban
+  // Order is important due to foreign key constraints
+  await prisma.userTaskChatStatus.deleteMany();
+  await prisma.mensajeChatTarea.deleteMany();
+  await prisma.notificacion.deleteMany();
+  await prisma.tarea.deleteMany();
+
+  // Nullify optional foreign keys in Project before deleting Users or Lookups
+  await prisma.project.updateMany({
+    data: {
+      proyectistaId: null,
+      formuladorId: null,
+      estadoId: null,
+      unidadId: null,
+      sectorId: null,
+      lineaFinanciamientoId: null,
+      programaId: null,
+      etapaFinanciamientoId: null,
+    }
+  });
+  // For M2M relation ProjectCollaborators, Prisma handles the join table if one side is deleted.
+  // No direct updateMany needed for the join table itself.
+
   await prisma.project.deleteMany();
-  await prisma.user.deleteMany(); // Borrar Users después de Projectos que los referencian
+  await prisma.user.deleteMany(); // Borrar Users después de Proyectos
   await prisma.etiqueta.deleteMany();
-  await prisma.programa.deleteMany();
+  await prisma.programa.deleteMany(); // Programa depende de LineaFinanciamiento
   await prisma.lineaFinanciamiento.deleteMany();
   await prisma.etapaFinanciamiento.deleteMany();
   await prisma.sector.deleteMany();
-  await prisma.tipologiaProyecto.deleteMany();
+  await prisma.tipologiaProyecto.deleteMany(); // Tipologia es referenciada por Project
   await prisma.unidadMunicipal.deleteMany();
   await prisma.estadoProyecto.deleteMany();
   console.log('Existing data deleted.');
 
   // --- Seed Lookup Tables ---
   console.log('Seeding Lookup Tables...');
-  const estado1 = await prisma.estadoProyecto.create({ data: { nombre: 'Idea' } });
-  const estado2 = await prisma.estadoProyecto.create({ data: { nombre: 'Perfil' } });
-  const estado3 = await prisma.estadoProyecto.create({ data: { nombre: 'Diseño' } });
-  const estado4 = await prisma.estadoProyecto.create({ data: { nombre: 'Ejecución' } });
-  const estado5 = await prisma.estadoProyecto.create({ data: { nombre: 'Terminado' } });
+  const estadosProyecto = await prisma.estadoProyecto.createManyAndReturn({
+    data: [
+      { nombre: 'Idea' }, { nombre: 'Perfil' }, { nombre: 'Diseño' },
+      { nombre: 'Ejecución' }, { nombre: 'Terminado' }, { nombre: 'Suspendido' }, { nombre: 'Cancelado' }
+    ],
+  });
 
-  const unidad1 = await prisma.unidadMunicipal.create({ data: { nombre: 'Secretaría de Planificación', abreviacion: 'SECPLAN' } });
-  const unidad2 = await prisma.unidadMunicipal.create({ data: { nombre: 'Dirección de Obras Municipales', abreviacion: 'DOM' } });
-  const unidad3 = await prisma.unidadMunicipal.create({ data: { nombre: 'Dirección de Construcciones', abreviacion: 'CONST' } });
+  const unidadesMunicipales = await prisma.unidadMunicipal.createManyAndReturn({
+    data: [
+      { nombre: 'Secretaría de Planificación', abreviacion: 'SECPLAN' },
+      { nombre: 'Dirección de Obras Municipales', abreviacion: 'DOM' },
+      { nombre: 'Dirección de Construcciones', abreviacion: 'CONST' },
+      { nombre: 'Dirección de Medio Ambiente', abreviacion: 'DMA' },
+      { nombre: 'Dirección de Tránsito', abreviacion: 'TRANS' },
+    ],
+  });
 
-  const tipo1 = await prisma.tipologiaProyecto.create({ data: { nombre: 'Espacio Público', abreviacion: 'EP', colorChip: '#4caf50' } });
-  const tipo2 = await prisma.tipologiaProyecto.create({ data: { nombre: 'Edificación Pública', abreviacion: 'EDP', colorChip: '#2196f3' } });
-  const tipo3 = await prisma.tipologiaProyecto.create({ data: { nombre: 'Infraestructura Vial', abreviacion: 'IV', colorChip: '#ff9800' } });
+  const tipologiasProyecto = await prisma.tipologiaProyecto.createManyAndReturn({
+    data: [
+      { nombre: 'Espacio Público', abreviacion: 'EP', colorChip: '#4caf50' }, // Verde
+      { nombre: 'Edificación Pública', abreviacion: 'EDP', colorChip: '#2196f3' }, // Azul
+      { nombre: 'Infraestructura Vial', abreviacion: 'IV', colorChip: '#ff9800' }, // Naranja
+      { nombre: 'Equipamiento Comunitario', abreviacion: 'EC', colorChip: '#795548' }, // Marrón
+      { nombre: 'Ciclovías', abreviacion: 'CV', colorChip: '#00bcd4' }, // Cyan
+      { nombre: 'Saneamiento Sanitario', abreviacion: 'SS', colorChip: '#9c27b0' }, // Púrpura
+    ],
+  });
 
-  const sector1 = await prisma.sector.create({ data: { nombre: 'Centro' } });
-  const sector2 = await prisma.sector.create({ data: { nombre: 'Norte' } });
-  const sector3 = await prisma.sector.create({ data: { nombre: 'Sur Poniente' } });
+  const sectores = await prisma.sector.createManyAndReturn({
+    data: [ { nombre: 'Centro' }, { nombre: 'Norte' }, { nombre: 'Sur Poniente' }, { nombre: 'Barrio Universitario' }, { nombre: 'Pedro de Valdivia' } ],
+  });
 
-  const linea1 = await prisma.lineaFinanciamiento.create({ data: { nombre: 'FNDR' } });
-  const linea2 = await prisma.lineaFinanciamiento.create({ data: { nombre: 'SUBDERE PMU' } });
-  const linea3 = await prisma.lineaFinanciamiento.create({ data: { nombre: 'MINVU DS27' } });
+  const lineasFinanciamiento = await prisma.lineaFinanciamiento.createManyAndReturn({
+    data: [ { nombre: 'FNDR' }, { nombre: 'SUBDERE PMU' }, { nombre: 'MINVU DS27' }, { nombre: 'Fondos Municipales' }, { nombre: 'GORE Bío Bío' } ],
+  });
 
-  const prog1 = await prisma.programa.create({ data: { nombre: 'Inversión Regional', lineaFinanciamientoId: linea1.id } });
-  const prog2 = await prisma.programa.create({ data: { nombre: 'Mejoramiento Urbano Emergencia', lineaFinanciamientoId: linea2.id } });
-  const prog3 = await prisma.programa.create({ data: { nombre: 'Pavimentos Participativos', lineaFinanciamientoId: linea3.id } });
+  const programas = [];
+  programas.push(await prisma.programa.create({ data: { nombre: 'Inversión Regional', lineaFinanciamientoId: lineasFinanciamiento[0].id } }));
+  programas.push(await prisma.programa.create({ data: { nombre: 'Mejoramiento Urbano Emergencia', lineaFinanciamientoId: lineasFinanciamiento[1].id } }));
+  programas.push(await prisma.programa.create({ data: { nombre: 'Pavimentos Participativos', lineaFinanciamientoId: lineasFinanciamiento[2].id } }));
+  programas.push(await prisma.programa.create({ data: { nombre: 'Proyectos Especiales Municipales', lineaFinanciamientoId: lineasFinanciamiento[3].id } }));
 
-  const etapa1 = await prisma.etapaFinanciamiento.create({ data: { nombre: 'RS (Recomendado)' } });
-  const etapa2 = await prisma.etapaFinanciamiento.create({ data: { nombre: 'Admisible' } });
-  const etapa3 = await prisma.etapaFinanciamiento.create({ data: { nombre: 'Convenio Mandato' } });
-  const etapa4 = await prisma.etapaFinanciamiento.create({ data: { nombre: 'Licitación' } });
+
+  const etapasFinanciamiento = await prisma.etapaFinanciamiento.createManyAndReturn({
+    data: [ { nombre: 'RS (Recomendado)' }, { nombre: 'Admisible' }, { nombre: 'Convenio Mandato' }, { nombre: 'Licitación Pública' }, { nombre: 'Adjudicado' }, { nombre: 'En Observación' } ],
+  });
   console.log('Lookup Tables seeded.');
 
   // --- Seed Etiquetas ---
@@ -65,108 +110,102 @@ async function main() {
   const etiquetaProy = await prisma.etiqueta.create({ data: { nombre: 'PROYECTISTA', color: '#9c27b0' } });
   const etiquetaForm = await prisma.etiqueta.create({ data: { nombre: 'FORMULADOR', color: '#3f51b5' } });
   const etiquetaCoord = await prisma.etiqueta.create({ data: { nombre: 'COORDINADOR', color: '#009688' } });
+  const etiquetaCivil = await prisma.etiqueta.create({ data: { nombre: 'ING. CIVIL', color: '#ffc107' } });
   console.log('Etiquetas seeded.');
 
   // --- Seed Users ---
   console.log('Seeding Users...');
   const hashedPasswordAdmin = await bcrypt.hash('admin123', 10);
-  const adminUser = await prisma.user.create({
-    data: {
-      email: 'admin@concepcion.cl',
-      password: hashedPasswordAdmin,
-      name: 'Administrador Sistema',
-      role: Role.ADMIN,
-      isActive: true,
-      etiquetas: { connect: [{ id: etiquetaCoord.id }] }
-    },
-  });
+  const adminUser = await prisma.user.create({ data: { email: 'admin@concepcion.cl', password: hashedPasswordAdmin, name: 'Admin Principal', role: Role.ADMIN, etiquetas: { connect: [{ id: etiquetaCoord.id }] } } });
 
   const hashedPasswordCoord = await bcrypt.hash('coord123', 10);
-  const coordUser = await prisma.user.create({
-    data: {
-      email: 'coordinador@concepcion.cl',
-      password: hashedPasswordCoord,
-      name: 'Coordinador Proyectos',
-      role: Role.COORDINADOR,
-      isActive: true,
-      etiquetas: { connect: [{ id: etiquetaCoord.id }, {id: etiquetaForm.id}] }
-    },
-  });
+  const coordUser = await prisma.user.create({ data: { email: 'coordinador@concepcion.cl', password: hashedPasswordCoord, name: 'Coordinador General', role: Role.COORDINADOR, etiquetas: { connect: [{ id: etiquetaCoord.id }, {id: etiquetaForm.id}] } } });
 
-    const hashedPasswordUser = await bcrypt.hash('user123', 10);
-    const regularUser = await prisma.user.create({
-      data: {
-        email: 'usuario@concepcion.cl',
-        password: hashedPasswordUser,
-        name: 'Usuario Proyectista',
-        role: Role.USUARIO,
-        isActive: true,
-        etiquetas: { connect: [{ id: etiquetaArq.id }, { id: etiquetaProy.id }] }
-      },
-    });
-    console.log(`Seeded Users: ${adminUser.email}, ${coordUser.email}, ${regularUser.email}`);
+  const hashedPasswordUser = await bcrypt.hash('user123', 10); // Misma pass para todos los usuarios de ejemplo
+  const user1 = await prisma.user.create({ data: { email: 'usuario1@concepcion.cl', password: hashedPasswordUser, name: 'Ana Proyectista', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaArq.id }, { id: etiquetaProy.id }] } } });
+  const user2 = await prisma.user.create({ data: { email: 'usuario2@concepcion.cl', password: hashedPasswordUser, name: 'Luis Formulador', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaForm.id }] } } });
+  const user3 = await prisma.user.create({ data: { email: 'usuario3@concepcion.cl', password: hashedPasswordUser, name: 'Carlos Civil', role: Role.USUARIO, isActive: false, etiquetas: { connect: [{ id: etiquetaCivil.id }, {id: etiquetaProy.id}] } } });
+  const user4 = await prisma.user.create({ data: { email: 'usuario4@concepcion.cl', password: hashedPasswordUser, name: 'Sofia Arquitecta', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaArq.id }] } } });
+  
+  const allUsers = [adminUser, coordUser, user1, user2, user3, user4];
+  console.log(`Seeded Users: ${allUsers.map(u => u.email).join(', ')}`);
 
-  // --- Seed Projects ---
-  console.log('Seeding Projects...');
-  // Project 1 (Assigned to regularUser)
-  const codigoP1 = `${tipo1.abreviacion}-001`;
-  await prisma.project.create({
-    data: {
-      codigoUnico: codigoP1,
-      nombre: 'Mejoramiento Plaza Perú',
-      descripcion: 'Remodelación integral de la plaza central, incluyendo áreas verdes, mobiliario urbano y luminarias.',
-      direccion: 'Plaza Perú S/N, Concepción',
-      superficieTerreno: 5000,
-      superficieEdificacion: null,
-      ano: 2024,
-      proyectoPriorizado: true,
-      estado: { connect: { id: estado3.id } },
-      unidad: { connect: { id: unidad1.id } },
-      tipologia: { connect: { id: tipo1.id } },
-      sector: { connect: { id: sector1.id } },
-      proyectista: { connect: { id: regularUser.id } },
-      formulador: { connect: { id: coordUser.id } },
-      colaboradores: { connect: [{ id: adminUser.id }] },
-      lineaFinanciamiento: { connect: { id: linea2.id } },
-      programa: { connect: { id: prog2.id } },
-      etapaActualFinanciamiento: { connect: { id: etapa2.id } },
-      monto: new Prisma.Decimal('85000000.00'), // Usa Prisma.Decimal
-      tipoMoneda: TipoMoneda.CLP,
-      codigoExpediente: 'EXP-PMU-2024-101',
-      fechaPostulacion: new Date('2024-03-15'),
-    },
-  });
-  console.log(`Seeded Project: ${codigoP1}`);
+  // --- Seed Projects (20 projects) ---
+  console.log('Seeding Projects (20)...');
+  const tipologiaCounters: { [key: string]: number } = {};
+  const projectNames = [
+    "Renovación Plaza Condell", "Centro Comunitario Barrio Norte", "Mejoramiento Luminarias Av. Alemania", "Ciclovía Costanera Biobío Tramo 1",
+    "Construcción CESFAM Tucapel", "Ampliación Biblioteca Municipal", "Parque Fluvial Ribera Norte", "Sede Social Villa Cap",
+    "Repavimentación Calle O'Higgins", "Mirador Cerro Caracol Etapa 2", "Skatepark Parque Ecuador", "Recuperación Laguna Lo Galindo",
+    "Centro Cultural Aurora de Chile", "Polideportivo Nonguén", "Terminal de Buses Rurales", "Paseo Peatonal Aníbal Pinto",
+    "Mercado Gastronómico Concepción", "Conexión Vial Pedro de Valdivia - Chiguayante", "Restauración Teatro Enrique Molina", "Museo de Historia de Concepción (Nuevo Edificio)"
+  ];
+  const projectImagePlaceholders = [
+    "https://images.pexels.com/photos/208736/pexels-photo-208736.jpeg?auto=compress&cs=tinysrgb&w=600", // Plaza
+    "https://images.pexels.com/photos/207983/pexels-photo-207983.jpeg?auto=compress&cs=tinysrgb&w=600", // Edificio
+    "https://images.pexels.com/photos/534027/pexels-photo-534027.jpeg?auto=compress&cs=tinysrgb&w=600", // Calle
+    "https://images.pexels.com/photos/1578794/pexels-photo-1578794.jpeg?auto=compress&cs=tinysrgb&w=600", // Ciclovia
+    null, // Sin imagen
+  ];
 
-  // Project 2 (Unassigned Proyectista initially)
-  const codigoP2 = `${tipo2.abreviacion}-001`;
+  for (let i = 0; i < 20; i++) {
+    const selectedTipologia = randomElement(tipologiasProyecto)!;
+    tipologiaCounters[selectedTipologia.abreviacion] = (tipologiaCounters[selectedTipologia.abreviacion] || 0) + 1;
+    const correlative = String(tipologiaCounters[selectedTipologia.abreviacion]).padStart(3, '0');
+    const codigoUnico = `${selectedTipologia.abreviacion}-${correlative}`;
+
+    const nombreProyecto = projectNames[i] || `Proyecto de Ejemplo ${selectedTipologia.nombre} N°${correlative}`;
+    const selectedEstado = randomElement(estadosProyecto)!;
+    const selectedUnidad = randomElement(unidadesMunicipales)!;
+    const selectedSector = randomElement(sectores)!;
+    const selectedProyectista = randomElement(allUsers.filter(u => u.role === Role.USUARIO || u.role === Role.COORDINADOR)); // Puede ser null
+    const selectedFormulador = randomElement(allUsers.filter(u => u.role === Role.USUARIO || u.role === Role.COORDINADOR)); // Puede ser null
+    const selectedLinea = randomElement(lineasFinanciamiento)!;
+    const programaCompatible = randomElement(programas.filter(p => p.lineaFinanciamientoId === selectedLinea.id)) || randomElement(programas)!;
+    const selectedEtapa = randomElement(etapasFinanciamiento)!;
+    const ano = randomNumber(2020, 2025);
+
     await prisma.project.create({
       data: {
-        codigoUnico: codigoP2,
-        nombre: 'Construcción Sede Vecinal Lorenzo Arenas',
-        descripcion: 'Nueva edificación para la junta de vecinos del sector.',
-        direccion: 'Calle Falsa 123, Lorenzo Arenas',
-        superficieTerreno: 800,
-        superficieEdificacion: 250,
-        ano: 2023,
-        proyectoPriorizado: false,
-        estado: { connect: { id: estado4.id } },
-        unidad: { connect: { id: unidad3.id } },
-        tipologia: { connect: { id: tipo2.id } },
-        sector: { connect: { id: sector3.id } },
-        proyectista: undefined,
-        formulador: { connect: { id: coordUser.id } },
-        lineaFinanciamiento: { connect: { id: linea1.id } },
-        programa: { connect: { id: prog1.id } },
-        etapaActualFinanciamiento: { connect: { id: etapa3.id } },
-        monto: new Prisma.Decimal('120000000'), // Usa Prisma.Decimal
-        tipoMoneda: TipoMoneda.CLP,
-        montoAdjudicado: new Prisma.Decimal('115500000.50'), // Usa Prisma.Decimal
-        codigoLicitacion: 'LIC-FNDR-2023-05',
+        codigoUnico,
+        nombre: nombreProyecto,
+        descripcion: `Descripción detallada para ${nombreProyecto}, enfocado en mejorar la calidad de vida de los habitantes del sector ${selectedSector.nombre}. Este proyecto de tipología ${selectedTipologia.nombre} se encuentra en estado ${selectedEstado.nombre} y es gestionado por ${selectedUnidad.nombre}.`,
+        imagenUrl: randomElement(projectImagePlaceholders),
+        direccion: `Calle Ficticia ${randomNumber(100, 1000)}, ${selectedSector.nombre}`,
+        superficieTerreno: randomNumber(500, 10000),
+        superficieEdificacion: selectedTipologia.abreviacion === 'EP' || selectedTipologia.abreviacion === 'CV' ? null : randomNumber(100, 2000),
+        ano,
+        proyectoPriorizado: Math.random() > 0.5,
+        estadoId: selectedEstado.id,
+        unidadId: selectedUnidad.id,
+        tipologiaId: selectedTipologia.id,
+        sectorId: selectedSector.id,
+        proyectistaId: selectedProyectista?.id,
+        formuladorId: selectedFormulador?.id,
+        // colaboradores: { connect: Math.random() > 0.7 ? [randomElement(allUsers.filter(u => u.id !== selectedProyectista?.id && u.id !== selectedFormulador?.id))!.id] : [] },
+        lineaFinanciamientoId: selectedLinea.id,
+        programaId: programaCompatible.id,
+        etapaFinanciamientoId: selectedEtapa.id,
+        monto: new Prisma.Decimal(randomNumber(50000, 300000) * 1000),
+        tipoMoneda: Math.random() > 0.7 ? TipoMoneda.UF : TipoMoneda.CLP,
+        codigoExpediente: Math.random() > 0.5 ? `EXP-${selectedTipologia.abreviacion}-${ano}-${randomNumber(100,200)}` : null,
+        fechaPostulacion: Math.random() > 0.6 ? new Date(`${ano}-${randomNumber(1,12)}-${randomNumber(1,28)}`) : null,
+        montoAdjudicado: Math.random() > 0.7 ? new Prisma.Decimal(randomNumber(40000, 280000) * 1000) : null,
+        codigoLicitacion: Math.random() > 0.4 ? `LIC-${selectedTipologia.abreviacion}-${correlative}` : null,
+        // --- CAMBIO AQUÍ ---
+        location_point: Math.random() > 0.3 
+            ? { type: "Point", coordinates: [-73.0400 - (Math.random() * 0.1), -36.8200 - (Math.random() * 0.1)] } 
+            : Prisma.DbNull, // Usar Prisma.DbNull en lugar de null
+        
+        // --- AÑADIDO PARA AREA_POLYGON (manéjalo de forma similar si lo necesitas) ---
+        area_polygon: Math.random() > 0.5 
+            ? { type: "Polygon", coordinates: [[[-73.05, -36.81], [-73.06, -36.81], [-73.06, -36.82], [-73.05, -36.82], [-73.05, -36.81]]]} // Ejemplo de polígono
+            : Prisma.DbNull, // Usar Prisma.DbNull
       },
     });
-    console.log(`Seeded Project: ${codigoP2}`);
-    console.log('Projects seeded.');
+    console.log(`Seeded Project: ${codigoUnico} - ${nombreProyecto}`);
+  }
+  console.log('20 Projects seeded.');
 
   console.log('Seeding finished.');
 }
@@ -178,8 +217,6 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    // Asegúrate que $disconnect se llame solo una vez si es necesario
-    // try { await prisma.$disconnect(); } catch {} // Evita doble desconexión si ya falló
-    await prisma.$disconnect(); // Intenta desconectar siempre
+    await prisma.$disconnect();
     console.log('Prisma client disconnected.');
   });

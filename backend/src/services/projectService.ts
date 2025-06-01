@@ -1,3 +1,4 @@
+// backend/src/services/projectService.ts
 import { Prisma, Role, TipoMoneda } from '@prisma/client';
 import prisma from '../config/prismaClient';
 import { CreateProjectInput, UpdateProjectInput, ListProjectsQuery } from '../schemas/projectSchemas';
@@ -297,7 +298,6 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
 
 
 // PUT /api/projects/:id (Actualizar)
-// =============== NUEVA FUNCION ===============
 export const updateProject = async (id: number, data: UpdateProjectInput, user: AuthenticatedUser) => {
     console.log(`[updateProject] Attempting update for Project ID ${id} by User ${user.id} (${user.role})`);
 
@@ -433,11 +433,8 @@ export const updateProject = async (id: number, data: UpdateProjectInput, user: 
         throw new AppError(`Error al actualizar el proyecto en la base de datos (ID: ${id})`, 500);
     }
 };
-// =============== FIN NUEVA FUNCION updateProject ===============
-
 
 // DELETE /api/projects/:id (Eliminar)
-// =============== NUEVA FUNCION ===============
 export const deleteProject = async (id: number, user: AuthenticatedUser) => {
     console.log(`[deleteProject] Attempting deletion for Project ID ${id} by User ${user.id} (${user.role})`);
 
@@ -481,4 +478,3 @@ export const deleteProject = async (id: number, user: AuthenticatedUser) => {
         throw new AppError(`Error al eliminar el proyecto (ID: ${id}) de la base de datos.`, 500);
     }
 };
-// =============== FIN NUEVA FUNCION deleteProject ===============

@@ -44,6 +44,17 @@ const theme = createTheme({
   shape: {
     borderRadius: BORDER_RADIUS_VALUE,
   },
+  
+  breakpoints: {
+    values: {
+      xs: 450,
+      sm: 600, // Valor personalizado
+      md: 950, // Valor personalizado
+      lg: 1300,
+      xl: 1600,
+    },
+  },
+  
   typography: {
     // ... tus configuraciones de tipografía ...
     // Ejemplo:

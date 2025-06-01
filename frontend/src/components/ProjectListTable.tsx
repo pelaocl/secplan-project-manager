@@ -1,141 +1,116 @@
-// ========================================================================
-// INICIO: Contenido COMPLETO y MODIFICADO para ProjectListTable.tsx
-// COPIA Y PEGA TODO ESTE BLOQUE EN TU ARCHIVO
-// ========================================================================
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-    Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Typography,
-    IconButton, Tooltip, Stack // <--- Añadidos
+    Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+    useTheme, useMediaQuery, Breakpoint, Typography
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit'; // <--- Añadido
-import DeleteIcon from '@mui/icons-material/Delete'; // <--- Añadido
-import { Link, useNavigate } from 'react-router-dom'; // <--- Añadido Link
-import { Project } from '../types'; // <-- Ajusta ruta si es necesario
+import { useNavigate } from 'react-router-dom'; // Asegúrate que este import esté
+import { Project } from '../types';
+
+// Definición de Columnas (Exportada para que ProjectListPage la use)
+export interface ColumnDefinition<T> {
+    id: string;
+    label: string;
+    align?: 'left' | 'right' | 'center';
+    minWidth?: string | number;
+    dataAccessor?: (item: T) => React.ReactNode;
+    renderCell?: (item: T, isAuthenticated: boolean) => React.ReactNode;
+    showOnBreakpoints?: Breakpoint[]; // Array de MUI Breakpoints: 'xs', 'sm', 'md', 'lg', 'xl'
+}
 
 interface ProjectListTableProps {
     projects: Project[];
+    columns: ColumnDefinition<Project>[];
     isAuthenticated: boolean;
-    onDeleteClick: (projectId: number, projectName: string) => void; // <--- Nueva Prop
+    // onDeleteClick ya no es necesaria como prop aquí, se maneja en el renderCell de la columna "Acciones"
 }
 
-// Definición de cabeceras (sin la de Acciones, se añade condicionalmente)
-const headCells = [
-    { id: 'codigoUnico', label: 'Código', align: 'left' as const }, // Usar 'as const' para tipo literal
-    { id: 'nombre', label: 'Nombre Proyecto', align: 'left' as const },
-    { id: 'tipologia', label: 'Tipología', align: 'left' as const },
-    { id: 'estado', label: 'Estado', align: 'left' as const },
-    { id: 'unidad', label: 'Unidad', align: 'left' as const },
-    { id: 'proyectista', label: 'Proyectista', align: 'left' as const },
-    { id: 'ano', label: 'Año', align: 'right' as const },
-];
-
-function ProjectListTable({ projects, isAuthenticated, onDeleteClick }: ProjectListTableProps) {
+function ProjectListTable({ projects, columns, isAuthenticated }: ProjectListTableProps) {
     const navigate = useNavigate();
+    const theme = useTheme();
 
-    // Navega a detalles al hacer clic en la fila (pero no en los botones)
+    // Hooks para determinar el estado de los breakpoints. Se llaman incondicionalmente.
+    const isXs = useMediaQuery(theme.breakpoints.only('xs'));
+    const isSm = useMediaQuery(theme.breakpoints.only('sm'));
+    const isMd = useMediaQuery(theme.breakpoints.only('md'));
+    const isLg = useMediaQuery(theme.breakpoints.only('lg'));
+    const isXl = useMediaQuery(theme.breakpoints.up('xl')); // up('xl') para xl y más grandes
+
+    // Memoizar las columnas visibles para evitar recalcular en cada render si las props no cambian
+    const dynamicallyVisibleColumns = useMemo(() => {
+        return columns.filter(col => {
+            if (!col.showOnBreakpoints || col.showOnBreakpoints.length === 0) {
+                return true; // Si no se especifican breakpoints, mostrar siempre
+            }
+            // La columna se muestra si el breakpoint actual está en su lista de showOnBreakpoints
+            if (isXs && col.showOnBreakpoints.includes('xs')) return true;
+            if (isSm && col.showOnBreakpoints.includes('sm')) return true;
+            if (isMd && col.showOnBreakpoints.includes('md')) return true;
+            if (isLg && col.showOnBreakpoints.includes('lg')) return true;
+            if (isXl && col.showOnBreakpoints.includes('xl')) return true;
+            return false;
+        });
+    }, [columns, isXs, isSm, isMd, isLg, isXl]); // Dependencias correctas
+
     const handleRowClick = (projectId: number) => {
         navigate(`/projects/${projectId}`);
     };
 
-    // Previene la navegación de fila cuando se hace clic en los botones de acción
-    const handleActionClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-    };
-
-    // Renderiza 'N/A' o un string vacío de forma segura
-    const safeGet = (value: string | undefined | null, defaultValue: string = 'N/A'): string => {
-        return value ?? defaultValue;
-    };
-
     if (!projects || projects.length === 0) {
-        return null; // O un mensaje indicando que no hay proyectos
+        // El mensaje de "No se encontraron proyectos" ya se maneja en ProjectListPage
+        // o se podría mostrar un mensaje más genérico aquí si la lista filtrada queda vacía
+        return <Typography sx={{ p: 2, textAlign: 'center' }}>No hay proyectos para mostrar con los filtros actuales.</Typography>;
     }
 
     return (
-        <TableContainer component={Paper} sx={{ mt: 2 }}>
-            <Table sx={{ minWidth: 650 }} aria-label="tabla de proyectos">
-                <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
+        <TableContainer component={Paper} sx={{ mt: 0, boxShadow: 'none', border: `1px solid ${theme.palette.divider}` }}>
+            <Table sx={{ minWidth: 340 }} aria-label="tabla de proyectos">{/*
+                No dejes líneas vacías o espacios aquí si es posible.
+                El <TableHead> debe ser el siguiente elemento lógico.
+            */}<TableHead sx={{ backgroundColor: theme.palette.grey[100] }}>
                     <TableRow>
-                        {headCells.map((headCell) => (
-                            <TableCell key={headCell.id} align={headCell.align} sx={{ fontWeight: 'bold' }}>
-                                {headCell.label}
+                        {dynamicallyVisibleColumns.map((column) => (
+                            <TableCell
+                                key={column.id}
+                                align={column.align || 'left'}
+                                sx={{ fontWeight: 'bold', py: 1, px: 1.5, minWidth: column.minWidth, whiteSpace: 'normal',wordBreak: 'break-word', }}
+                            >
+                                {column.label}
                             </TableCell>
                         ))}
-                        {/* Cabecera Condicional "Acciones" */}
-                        {isAuthenticated && (
-                            <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: '100px' }}> {/* Añade minWidth si es necesario */}
-                                Acciones
-                            </TableCell>
-                        )}
                     </TableRow>
-                </TableHead>
-                <TableBody>
+                </TableHead><TableBody>
                     {projects.map((project) => (
                         <TableRow
                             key={project.id}
                             hover
                             onClick={() => handleRowClick(project.id)}
-                            sx={{ cursor: 'pointer', '&:last-child td, &:last-child th': { border: 0 } }}
+                            sx={{ 
+                                cursor: 'pointer', 
+                                '&:last-child td, &:last-child th': { border: 0 },
+                                '&:hover': { backgroundColor: theme.palette.action.hover }
+                            }}
                         >
-                            {/* Celdas de Datos */}
-                            <TableCell component="th" scope="row">
-                                <Chip
-                                    label={project.codigoUnico || '?'}
-                                    size="small"
-                                    variant="filled"
-                                    sx={{
-                                        backgroundColor: project.tipologia?.colorChip || '#e0e0e0',
-                                        color: '#fff',
-                                        textShadow: '1px 1px 1px rgba(0,0,0,0.4)'
-                                    }}/>
-                            </TableCell>
-                            <TableCell>{project.nombre || ''}</TableCell>
-                            <TableCell>{project.tipologia?.nombre || ''}</TableCell>
-                            <TableCell>{safeGet(project.estado?.nombre)}</TableCell>
-                            <TableCell>{project.unidad?.nombre || ''}</TableCell>
-                            {/* Muestra proyectista solo si está autenticado */}
-                            <TableCell>{isAuthenticated ? safeGet(project.proyectista?.name ?? project.proyectista?.email, '') : ''}</TableCell>
-                            <TableCell align="right">{project.ano ?? ''}</TableCell>
-
-                            {/* Celda Condicional "Acciones" */}
-                            {isAuthenticated && (
-                                <TableCell align="center" onClick={handleActionClick}> {/* Detiene propagación */}
-                                    <Stack direction="row" spacing={0.5} justifyContent="center"> {/* Ajusta spacing si es necesario */}
-                                        <Tooltip title="Editar Proyecto">
-                                            {/* Usamos Link para navegación directa */}
-                                            <IconButton
-                                                component={Link}
-                                                to={`/projects/${project.id}/edit`}
-                                                size="small"
-                                                aria-label="editar"
-                                                color="primary"
-                                            >
-                                                <EditIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Eliminar Proyecto">
-                                            {/* Llama a la función pasada por props */}
-                                            <IconButton
-                                                onClick={() => onDeleteClick(project.id, project.nombre)}
-                                                size="small"
-                                                aria-label="eliminar"
-                                                color="error"
-                                            >
-                                                <DeleteIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </Stack>
+                            {dynamicallyVisibleColumns.map((column, index) => (
+                                <TableCell
+                                    key={`${project.id}-${column.id}`}
+                                    align={column.align || 'left'}
+                                    component={index === 0 ? "th" : "td"}
+                                    scope={index === 0 ? "row" : undefined}
+                                    sx={{ py: 1, px: 1.5 }}
+                                >
+                                    {column.renderCell
+                                        ? column.renderCell(project, isAuthenticated)
+                                        : column.dataAccessor
+                                            ? column.dataAccessor(project)
+                                            : 'N/D'
+                                    }
                                 </TableCell>
-                            )}
+                            ))}
                         </TableRow>
                     ))}
-                </TableBody>
-            </Table>
+                </TableBody></Table>
         </TableContainer>
     );
 }
 
 export default ProjectListTable;
-// ========================================================================
-// FIN: Contenido COMPLETO y MODIFICADO para ProjectListTable.tsx
-// ========================================================================

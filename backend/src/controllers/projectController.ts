@@ -1,3 +1,4 @@
+// backend/sec/controllers/projectController.ts:
 import { Request, Response, NextFunction } from 'express';
 import * as projectService from '../services/projectService';
 import { CreateProjectInput, UpdateProjectInput, ListProjectsQuery } from '../schemas/projectSchemas';

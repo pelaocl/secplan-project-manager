@@ -1,7 +1,4 @@
-// ========================================================================
-// INICIO: Contenido COMPLETO y MODIFICADO para projectApi.ts (AÑADE DELETE)
-// COPIA Y PEGA TODO ESTE BLOQUE EN TU ARCHIVO
-// ========================================================================
+// frontend/src/services/projectApi.ts:
 import { apiService, ApiError } from './apiService';
 import { Project } from '../types';
 import { ProjectFormSchemaType } from '../schemas/projectFormSchema';
@@ -162,5 +159,5 @@ export const projectApi = {
     getProjectById,
     createProject,
     updateProject,
-    deleteProject, // <-- Añadida la nueva función
+    deleteProject,
 };
