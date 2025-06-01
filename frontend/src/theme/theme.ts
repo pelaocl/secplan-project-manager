@@ -25,16 +25,16 @@ const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#556cd6', // Tu azul/índigo primario
+      main: '#515b7d', // Tu azul/índigo primario
     },
     secondary: {
-      main: '#19857b', // Tu verde azulado secundario
+      main: '#32b3ac', // Tu verde azulado secundario
     },
     // 3. NUEVO COLOR TERCIARIO (AMARILLO SUAVE)
     tertiary: {
-      main: '#E6D9A0',         // Amarillo suave / Lino / Pergamino
-      light: '#F0E8C0',       // Un tono más claro de #E6D9A0
-      dark: '#D1C480',        // Un tono más oscuro de #E6D9A0
+      main: '#f0e5b6',         // Amarillo suave / Lino / Pergamino
+      light: '#f0ebd1',       // Un tono más claro de #E6D9A0
+      dark: '#bfb375',        // Un tono más oscuro de #E6D9A0
       contrastText: '#3A3A3A', // Texto gris oscuro para buen contraste con #E6D9A0
     },
     error: {
@@ -48,8 +48,8 @@ const theme = createTheme({
   breakpoints: {
     values: {
       xs: 450,
-      sm: 600, // Valor personalizado
-      md: 950, // Valor personalizado
+      sm: 600,
+      md: 950,
       lg: 1300,
       xl: 1600,
     },

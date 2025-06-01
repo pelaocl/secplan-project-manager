@@ -109,8 +109,20 @@ function ProjectDetailPage() {
     const currentUser = useCurrentUser(); // Usar el hook importado
     const projectIdNum = id ? parseInt(id, 10) : NaN;
 
+    // --- 1. Función para Determinar la Sección Inicial ---
+    const determineInitialActiveSection = useCallback((): ProjectSection => {
+        // Condición para acceso a tareas (actualmente, si está autenticado)
+        // Podrías hacer esta condición más específica si es necesario (ej. por rol)
+        const canAccessTasks = isAuthenticated;
+
+        if (canAccessTasks) {
+            return 'tareas';
+        }
+        return 'infoBasica';
+    }, [isAuthenticated]); // Depende de isAuthenticated
+
     // Estado para la sección activa en el panel derecho
-    const [activeSection, setActiveSection] = useState<ProjectSection>('infoBasica');
+    const [activeSection, setActiveSection] = useState<ProjectSection>(determineInitialActiveSection());
     const [hasSetInitialSection, setHasSetInitialSection] = useState<boolean>(false);
 
     // Estado para el filtro de tareas
@@ -150,7 +162,6 @@ function ProjectDetailPage() {
                  // Por defecto, si el usuario es guest y hay imagen, mostrarla, si no, info básica.
                  // Si es autenticado, podríamos dirigirlo a 'tareas' o 'descripción' si es más relevante,
                  // pero 'infoBasica' es un buen default general.
-                setActiveSection('infoBasica');
             }
             if (isAuthenticated) {
                 if (isFullLoad) {
@@ -180,17 +191,25 @@ function ProjectDetailPage() {
 
     useEffect(() => {
         if (projectIdNum) {
-            setHasSetInitialSection(false);
-            loadPageData(true);
+            loadPageData(true); // Carga los datos del proyecto
+
+            // Re-evalúa y establece la sección activa si el estado de autenticación ha cambiado
+            // o para asegurar la correcta al cargar un nuevo proyecto.
+            const newInitialSection = determineInitialActiveSection();
+            if (activeSection !== newInitialSection) { // Solo actualiza si es diferente para evitar re-renders innecesarios
+                setActiveSection(newInitialSection);
+            }
         } else {
-            setProject(null); setTasks([]); setLookupOptions(null);
+            setProject(null); 
+            setTasks([]); 
+            setLookupOptions(null);
             setErrorProject("ID de proyecto no especificado.");
             setLoadingProject(false); 
             setLoadingTasks(false); 
             setLoadingLookups(false);
             setHasSetInitialSection(true);
         }
-    }, [projectIdNum, isAuthenticated, loadPageData]);
+    }, [projectIdNum, isAuthenticated, loadPageData, determineInitialActiveSection]);
 
     useEffect(() => {
         // Solo actuar si:
@@ -294,6 +313,19 @@ function ProjectDetailPage() {
                         <ArrowBackIcon />
                     </IconButton>
                 </Tooltip>
+                <Chip // Chip para el Código Único
+                    label={project.codigoUnico || '?'}
+                    size="medium" // O 'medium' si quieres más énfasis
+                    sx={{
+                        backgroundColor: project.tipologia?.colorChip || theme.palette.grey[400],
+                        color: theme.palette.getContrastText(project.tipologia?.colorChip || theme.palette.grey[400]),
+                        fontWeight: 'bold',
+                        fontSize: '1.3rem',
+                        mr: 1.5,
+                        ml: 1,
+                        // Este chip ahora está en una fila con fondo claro, los colores deberían funcionar bien.
+                    }}
+                />
                 <Typography
                     variant={isSmallScreen ? "h6" : "h5"}
                     component="h1"
@@ -307,7 +339,7 @@ function ProjectDetailPage() {
                         mr: 2,                      // Margen derecho para separarlo de los botones de acción
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
+                        whiteSpace: 'nowrap',
                     }}
                     title={project.nombre.toUpperCase()} // También puedes poner el title en mayúsculas
                 >
@@ -315,6 +347,7 @@ function ProjectDetailPage() {
                     {/* El textTransform en sx se encarga de la visualización, 
                         pero no cambia el valor de project.nombre en sí */}
                 </Typography>
+                
                 <Stack direction="row" spacing={1}>
                     <Tooltip title="Imprimir Ficha (Pendiente)">
                         <Button 
@@ -374,12 +407,11 @@ function ProjectDetailPage() {
             >
                 {/* Para los IconDetailItem, necesitamos asegurar que su texto y iconos usen el contrastText */}
                 <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}> {/* flexGrow para que en xs ocupen mejor el espacio */}
-                    <IconDetailItem dense icon={VpnKeyIcon} label="Código" value={project.codigoUnico}
-                        sx={{
-                            // Sobrescribir colores internos de IconDetailItem para que usen el contrastText
+                    <IconDetailItem dense icon={VpnKeyIcon} label="Código Único" value={project.codigoUnico}
+                        sx={{ 
                             '& .MuiSvgIcon-root': { color: theme.palette.tertiary.contrastText, fontSize: '1rem' },
-                            '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 }, // Label
-                            '& .MuiTypography-subtitle2, & .MuiTypography-body2': { color: theme.palette.tertiary.contrastText } // Value
+                            '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 },
+                            '& .MuiTypography-subtitle2, & .MuiTypography-body2': { color: theme.palette.tertiary.contrastText } 
                         }} />
                 </Grid>
                 <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}>
@@ -391,7 +423,7 @@ function ProjectDetailPage() {
                         }} />
                 </Grid>
                 <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}>
-                    <IconDetailItem dense icon={InfoOutlinedIcon} label="Estado" value={project.estado?.nombre || 'N/A'}
+                    <IconDetailItem dense icon={InfoOutlinedIcon} label="Estado Actual" value={project.estado?.nombre || 'N/A'}
                         sx={{
                             '& .MuiSvgIcon-root': { color: theme.palette.tertiary.contrastText, fontSize: '1rem' },
                             '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 },
@@ -399,7 +431,7 @@ function ProjectDetailPage() {
                         }} />
                 </Grid>
                 <Grid item xs={6} sm="auto" sx={{ flexGrow: { xs: 1, sm:0 } }}>
-                    <IconDetailItem dense icon={UpdateIcon} label="Últ. Modif." value={formatDate(project.updatedAt)}
+                    <IconDetailItem dense icon={UpdateIcon} label="Última Actualización" value={formatDate(project.updatedAt)}
                         sx={{
                             '& .MuiSvgIcon-root': { color: theme.palette.tertiary.contrastText, fontSize: '1rem' },
                             '& .MuiTypography-caption': { color: theme.palette.tertiary.contrastText, opacity: 0.8 },
@@ -411,9 +443,8 @@ function ProjectDetailPage() {
     );
 
     const menuItems = [
-        { id: 'infoBasica' as ProjectSection, label: 'Información Básica', icon: <InfoIcon /> },
-        // El ítem 'Tareas' se añade condicionalmente aquí, después de 'Información Básica'
         ...(showTasksSectionInMenu ? [{ id: 'tareas' as ProjectSection, label: 'Tareas', icon: <ListAltIcon /> }] : []),
+        { id: 'infoBasica' as ProjectSection, label: 'Información Básica', icon: <InfoIcon /> },
         { id: 'descripcion' as ProjectSection, label: 'Descripción del Proyecto', icon: <DescriptionIcon /> },
         { id: 'ubicacion' as ProjectSection, label: 'Ubicación y Superficie', icon: <MyLocationIcon /> },
     ];
@@ -531,31 +562,99 @@ function ProjectDetailPage() {
                         )}
                     </Paper>
                 );
-            case 'descripcion':
-                return (
-                     <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2, minHeight: '300px' }}>
-                        <Typography variant="h5" component="h2" gutterBottom sx={{fontWeight: 'medium'}}>Descripción del Proyecto</Typography>
-                        <Divider sx={{ mb: 2 }} />
-                        {project.descripcion ? (
-                            <Box 
-                                className="tiptap-content-display" // Asegúrate que tus estilos globales para Tiptap se apliquen aquí
-                                sx={{ 
-                                    lineHeight: 1.7, 
-                                    '& h1': { my: theme.spacing(2.5), fontSize: '1.8rem', fontWeight: 500, borderBottom: `1px solid ${theme.palette.divider}`, pb: 1 }, 
-                                    '& h2': { my: theme.spacing(2), fontSize: '1.5rem', fontWeight: 500 }, 
-                                    '& h3': { my: theme.spacing(1.5), fontSize: '1.3rem', fontWeight: 500 }, 
-                                    '& p': { mb: theme.spacing(1.5) }, 
-                                    '& ul, & ol': { pl: theme.spacing(3), mb: theme.spacing(1.5) }, 
-                                    '& a': { color: theme.palette.primary.main, textDecoration: 'underline' }, 
-                                    '& img': { maxWidth: '100%', height: 'auto', my: theme.spacing(2), borderRadius: theme.shape.borderRadius, boxShadow: theme.shadows[3] } 
-                                }} 
-                                dangerouslySetInnerHTML={{ __html: project.descripcion }} 
-                            />
-                        ) : (
-                            <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py:2}}>No se ha proporcionado una descripción para este proyecto.</Typography>
-                        )}
-                    </Paper>
-                );
+                case 'descripcion':
+                    return (
+                         <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2, minHeight: '300px' }}>
+                            <Typography variant="h5" component="h2" gutterBottom sx={{fontWeight: 'medium'}}>Descripción del Proyecto</Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            {project.descripcion ? (
+                                <Box
+                                    className="tiptap-content-display" // Clase para posibles estilos globales
+                                    sx={{
+                                        // --- CONFIGURACIÓN GENERAL DE PÁRRAFOS Y LÍNEAS ---
+                                        lineHeight: 1, // Controla el interlineado general
+                                        '& p': { 
+                                            mb: theme.spacing(1.5), // Margen inferior de los párrafos (ej. 12px si theme.spacing(1)=8px)
+                                            textIndent: theme.spacing(5),
+                                            lineHeight: 2,
+                                            // Aquí podrías añadir:
+                                            // textIndent: theme.spacing(2), // Si quieres sangría en la primera línea
+                                            // '&:first-of-type': { textIndent: 0 }, // Para no aplicar sangría al primer párrafo
+                                        },
+                
+                                        // --- ENCABEZADOS (HEADERS) ---
+                                        '& h1': { 
+                                            my: theme.spacing(3),  // Margen vertical (arriba y abajo) para h1
+                                            fontSize: '1.8rem', 
+                                            fontWeight: 'bold',    // <--- CAMBIO AQUÍ (antes era 500)
+                                        },
+                                        '& h2': { 
+                                            my: theme.spacing(2.5), // Margen vertical para h2
+                                            fontSize: '1.5rem', 
+                                            fontWeight: 'bold',    // <--- CAMBIO AQUÍ
+                                        },
+                                        '& h3': { 
+                                            my: theme.spacing(2),   // Margen vertical para h3
+                                            fontSize: '1.3rem', 
+                                            fontWeight: 'bold',    // <--- CAMBIO AQUÍ
+                                        },
+                                        // Puedes añadir estilos para '& h4', '& h5', '& h6' de forma similar si los usas:
+                                        // '& h4': { my: theme.spacing(1.5), fontSize: '1.1rem', fontWeight: 'bold' },
+                                        
+                                        // --- LISTAS ---
+                                        '& ul, & ol': { 
+                                            pl: theme.spacing(3),    // Padding izquierdo para listas
+                                            mb: theme.spacing(1.5),  // Margen inferior para listas
+                                            // listStylePosition: 'inside', // Opcional, para cómo se muestran los bullets/números
+                                        },
+                                        '& li': {
+                                            mb: theme.spacing(0.5), // Espaciado entre ítems de lista
+                                        },
+                
+                                        // --- ENLACES ---
+                                        '& a': { 
+                                            color: theme.palette.primary.main, 
+                                            textDecoration: 'underline',
+                                            '&:hover': {
+                                                color: theme.palette.primary.dark,
+                                            }
+                                        },
+                
+                                        // --- IMÁGENES ---
+                                        '& img': { 
+                                            maxWidth: '100%',       // Para que sean responsivas
+                                            height: 'auto',         // Mantener proporción
+                                            my: theme.spacing(2.5), // Margen vertical para imágenes
+                                            borderRadius: theme.shape.borderRadius / 4, // Bordes redondeados
+                                            boxShadow: theme.shadows[3],          // Sombra sutil
+                                            display: 'block',       // Para que los márgenes my funcionen bien
+                                            marginLeft: 'auto',     // Para centrar imágenes si son más pequeñas que el contenedor
+                                            marginRight: 'auto',
+                                        },
+                                        
+                                        // --- OTROS ELEMENTOS COMUNES ---
+                                        '& blockquote': {
+                                            borderLeft: `4px solid ${theme.palette.grey[300]}`,
+                                            pl: theme.spacing(2),
+                                            ml: 0, // Resetea margen por defecto si es necesario
+                                            my: theme.spacing(2),
+                                            fontStyle: 'italic',
+                                            color: theme.palette.text.secondary,
+                                        },
+                                        '& hr': {
+                                            my: theme.spacing(3),
+                                            borderColor: theme.palette.divider,
+                                        }
+                                        // Añade aquí cualquier otro selector para elementos HTML que Tiptap pueda generar
+                                    }}
+                                    dangerouslySetInnerHTML={{ __html: project.descripcion }}
+                                />
+                            ) : (
+                                <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py:2}}>No se ha proporcionado una descripción para este proyecto.</Typography>
+                            )}
+                        </Paper>
+                    );
+
             case 'infoBasica':
                 return (
                      <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2 }}>

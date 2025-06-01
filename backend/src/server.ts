@@ -27,6 +27,7 @@ dotenv.config();
 
 const app: Express = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
+const HOST = '0.0.0.0';
 const API_PREFIX = '/api';
 // Asegúrate de que JWT_SECRET esté definido en tu .env o usa un valor por defecto SEGURO solo para desarrollo.
 const JWT_SECRET = process.env.JWT_SECRET || '8172348712iadwhdiuawdAWDAWED1238791293awdawd'; 
@@ -99,7 +100,7 @@ const io = new SocketIOServer(httpServer, {
     }
 });
 
-initializeSocketManager(io); // <-- AÑADIR ESTA LÍNEA después de crear 'io'
+initializeSocketManager(io);
 
 // Middleware de Autenticación para Socket.IO
 io.use((socket: Socket, next) => {
@@ -181,7 +182,7 @@ io.on('connection', (socket: Socket) => {
 
 // --- Start Server & Graceful Shutdown ---
 // Modificamos 'server' para que se refiera a httpServer
-const httpServerInstance = httpServer.listen(PORT, '0.0.0.0', () => { // Renombrado para evitar conflicto con 'server' de express
+const httpServerInstance = httpServer.listen(PORT, HOST, '0.0.0.0', () => { // Renombrado para evitar conflicto con 'server' de express
     console.log(`🚀 Servidor HTTP y Socket.IO corriendo en el puerto ${PORT}`); 
 });
 

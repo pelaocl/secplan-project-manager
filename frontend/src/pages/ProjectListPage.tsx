@@ -216,7 +216,7 @@ function ProjectListPage() {
 
     return (
         <Container maxWidth="xl">
-            <Box sx={{ my: 4 }}>
+            <Box sx={{ my: 1 }}>
                 <Stack direction={{ xs: 'row', sm: 'row' }} justifyContent="space-between" alignItems="center" spacing={2} mb={3} >
                     <TextField
                         variant="outlined"
