@@ -115,9 +115,9 @@ function ProjectDetailPage() {
         // Podrías hacer esta condición más específica si es necesario (ej. por rol)
         const canAccessTasks = isAuthenticated;
 
-        if (canAccessTasks) {
-            return 'tareas';
-        }
+        //if (canAccessTasks) {
+        //    return 'tareas';
+        //}
         return 'infoBasica';
     }, [isAuthenticated]); // Depende de isAuthenticated
 
@@ -221,7 +221,7 @@ function ProjectDetailPage() {
             // La condición para "acceso a la bitácora de tareas" es si el usuario está autenticado,
             // ya que así se define si el ítem "Tareas" aparece en el menú.
             if (isAuthenticated) {
-                setActiveSection('tareas'); // Para usuarios autenticados
+                setActiveSection('infoBasica'); // Para usuarios autenticados
             } else {
                 setActiveSection('infoBasica'); // Para usuarios no autenticados (invitados)
             }

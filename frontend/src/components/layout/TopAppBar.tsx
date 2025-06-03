@@ -72,7 +72,7 @@ function TopAppBar() {
             <Toolbar>
                 <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                     <RouterLink to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-                        SECPLAN Gestor Proyectos
+                        SECPLAN - Gestor de Proyectos
                     </RouterLink>
                 </Typography>
 

@@ -65,36 +65,36 @@ async function main() {
 
   const unidadesMunicipales = await prisma.unidadMunicipal.createManyAndReturn({
     data: [
-      { nombre: 'Secretaría de Planificación', abreviacion: 'SECPLAN' },
-      { nombre: 'Dirección de Obras Municipales', abreviacion: 'DOM' },
-      { nombre: 'Dirección de Construcciones', abreviacion: 'CONST' },
-      { nombre: 'Dirección de Medio Ambiente', abreviacion: 'DMA' },
-      { nombre: 'Dirección de Tránsito', abreviacion: 'TRANS' },
+      { nombre: 'Arquitectura', abreviacion: 'ARQ' },
+      { nombre: 'Asesoría Urbana', abreviacion: 'AU' },
+      { nombre: 'Psat', abreviacion: 'PSAT' },
+      { nombre: 'Ingeniería', abreviacion: 'ING' },
+      { nombre: 'Formulación', abreviacion: 'FORM' },
     ],
   });
 
   const tipologiasProyecto = await prisma.tipologiaProyecto.createManyAndReturn({
     data: [
-      { nombre: 'Espacio Público', abreviacion: 'EP', colorChip: '#4caf50' }, // Verde
-      { nombre: 'Edificación Pública', abreviacion: 'EDP', colorChip: '#2196f3' }, // Azul
-      { nombre: 'Infraestructura Vial', abreviacion: 'IV', colorChip: '#ff9800' }, // Naranja
-      { nombre: 'Equipamiento Comunitario', abreviacion: 'EC', colorChip: '#795548' }, // Marrón
-      { nombre: 'Ciclovías', abreviacion: 'CV', colorChip: '#00bcd4' }, // Cyan
-      { nombre: 'Saneamiento Sanitario', abreviacion: 'SS', colorChip: '#9c27b0' }, // Púrpura
+      { nombre: 'Espacio Público', abreviacion: 'ESP', colorChip: '#4caf50' }, // Verde
+      { nombre: 'Mixto', abreviacion: 'MIX', colorChip: '#2196f3' }, // Azul
+      { nombre: 'Vivienda', abreviacion: 'VIV', colorChip: '#ff9800' }, // Naranja
+      { nombre: 'Infraestructura', abreviacion: 'INF', colorChip: '#795548' }, // Marrón
+      { nombre: 'Activo No Financiero', abreviacion: 'ANF', colorChip: '#00bcd4' }, // Cyan
+      { nombre: 'Equipamiento', abreviacion: 'EQP', colorChip: '#9c27b0' }, // Púrpura
     ],
   });
 
   const sectores = await prisma.sector.createManyAndReturn({
-    data: [ { nombre: 'Centro' }, { nombre: 'Norte' }, { nombre: 'Sur Poniente' }, { nombre: 'Barrio Universitario' }, { nombre: 'Pedro de Valdivia' } ],
+    data: [ { nombre: 'Centro Sur' }, { nombre: 'Centro Norte' }, { nombre: 'Valle Escondido' }, { nombre: 'Pedro de Valdivia' }, { nombre: 'Barrio Universitario' }, { nombre: 'Teniente Merino I' }, { nombre: 'Teniente Merino II'}, { nombre: 'Villa San Franciscos' } ],
   });
 
   const lineasFinanciamiento = await prisma.lineaFinanciamiento.createManyAndReturn({
-    data: [ { nombre: 'FNDR' }, { nombre: 'SUBDERE PMU' }, { nombre: 'MINVU DS27' }, { nombre: 'Fondos Municipales' }, { nombre: 'GORE Bío Bío' } ],
+    data: [ { nombre: 'FNDR' }, { nombre: 'SUBDERE' }, { nombre: 'MINVU' }, { nombre: 'FONDO MUNICIPAL' }, { nombre: 'OTRO' } ],
   });
 
   const programas = [];
-  programas.push(await prisma.programa.create({ data: { nombre: 'Inversión Regional', lineaFinanciamientoId: lineasFinanciamiento[0].id } }));
-  programas.push(await prisma.programa.create({ data: { nombre: 'Mejoramiento Urbano Emergencia', lineaFinanciamientoId: lineasFinanciamiento[1].id } }));
+  programas.push(await prisma.programa.create({ data: { nombre: 'FNDR', lineaFinanciamientoId: lineasFinanciamiento[0].id } }));
+  programas.push(await prisma.programa.create({ data: { nombre: 'PMU', lineaFinanciamientoId: lineasFinanciamiento[1].id } }));
   programas.push(await prisma.programa.create({ data: { nombre: 'Pavimentos Participativos', lineaFinanciamientoId: lineasFinanciamiento[2].id } }));
   programas.push(await prisma.programa.create({ data: { nombre: 'Proyectos Especiales Municipales', lineaFinanciamientoId: lineasFinanciamiento[3].id } }));
 
@@ -110,22 +110,22 @@ async function main() {
   const etiquetaProy = await prisma.etiqueta.create({ data: { nombre: 'PROYECTISTA', color: '#9c27b0' } });
   const etiquetaForm = await prisma.etiqueta.create({ data: { nombre: 'FORMULADOR', color: '#3f51b5' } });
   const etiquetaCoord = await prisma.etiqueta.create({ data: { nombre: 'COORDINADOR', color: '#009688' } });
-  const etiquetaCivil = await prisma.etiqueta.create({ data: { nombre: 'ING. CIVIL', color: '#ffc107' } });
+  const etiquetaCivil = await prisma.etiqueta.create({ data: { nombre: 'ADMINISTRADOR', color: '#ffc107' } });
   console.log('Etiquetas seeded.');
 
   // --- Seed Users ---
   console.log('Seeding Users...');
   const hashedPasswordAdmin = await bcrypt.hash('admin123', 10);
-  const adminUser = await prisma.user.create({ data: { email: 'admin@concepcion.cl', password: hashedPasswordAdmin, name: 'Admin Principal', role: Role.ADMIN, etiquetas: { connect: [{ id: etiquetaCoord.id }] } } });
+  const adminUser = await prisma.user.create({ data: { email: 'admin@concepcion.cl', password: hashedPasswordAdmin, name: 'Administrador', role: Role.ADMIN, etiquetas: { connect: [{ id: etiquetaCoord.id }] } } });
 
   const hashedPasswordCoord = await bcrypt.hash('coord123', 10);
-  const coordUser = await prisma.user.create({ data: { email: 'coordinador@concepcion.cl', password: hashedPasswordCoord, name: 'Coordinador General', role: Role.COORDINADOR, etiquetas: { connect: [{ id: etiquetaCoord.id }, {id: etiquetaForm.id}] } } });
+  const coordUser = await prisma.user.create({ data: { email: 'coordinador@concepcion.cl', password: hashedPasswordCoord, name: 'Coordinador', role: Role.COORDINADOR, etiquetas: { connect: [{ id: etiquetaCoord.id }, {id: etiquetaForm.id}] } } });
 
   const hashedPasswordUser = await bcrypt.hash('user123', 10); // Misma pass para todos los usuarios de ejemplo
-  const user1 = await prisma.user.create({ data: { email: 'usuario1@concepcion.cl', password: hashedPasswordUser, name: 'Ana Proyectista', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaArq.id }, { id: etiquetaProy.id }] } } });
-  const user2 = await prisma.user.create({ data: { email: 'usuario2@concepcion.cl', password: hashedPasswordUser, name: 'Luis Formulador', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaForm.id }] } } });
-  const user3 = await prisma.user.create({ data: { email: 'usuario3@concepcion.cl', password: hashedPasswordUser, name: 'Carlos Civil', role: Role.USUARIO, isActive: false, etiquetas: { connect: [{ id: etiquetaCivil.id }, {id: etiquetaProy.id}] } } });
-  const user4 = await prisma.user.create({ data: { email: 'usuario4@concepcion.cl', password: hashedPasswordUser, name: 'Sofia Arquitecta', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaArq.id }] } } });
+  const user1 = await prisma.user.create({ data: { email: 'jalarcon@concepcion.cl', password: hashedPasswordUser, name: 'Jorge Alarcón', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaArq.id }, { id: etiquetaProy.id }] } } });
+  const user2 = await prisma.user.create({ data: { email: 'ahernandez@concepcion.cl', password: hashedPasswordUser, name: 'Alejandro Hernandez', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaForm.id }] } } });
+  const user3 = await prisma.user.create({ data: { email: 'pobanos@concepcion.cl', password: hashedPasswordUser, name: 'Pia Obanos', role: Role.USUARIO, isActive: false, etiquetas: { connect: [{ id: etiquetaCivil.id }, {id: etiquetaProy.id}] } } });
+  const user4 = await prisma.user.create({ data: { email: 'cfigueroa@concepcion.cl', password: hashedPasswordUser, name: 'Claudio Figueroa', role: Role.USUARIO, etiquetas: { connect: [{ id: etiquetaArq.id }] } } });
   
   const allUsers = [adminUser, coordUser, user1, user2, user3, user4];
   console.log(`Seeded Users: ${allUsers.map(u => u.email).join(', ')}`);

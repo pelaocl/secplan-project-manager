@@ -46,7 +46,7 @@ app.use(cors({
         // Por ahora, mantenemos la lógica original, pero considera ajustarla si las llamadas API fallan desde la tablet.
         const allowedHttpOrigins = [
             `http://localhost:5173`,
-            `http://192.168.50.195:5173` // REEMPLAZA <TU_IP_LOCAL_DE_PC>
+            `http://192.10.10.150:5173` // REEMPLAZA <TU_IP_LOCAL_DE_PC>
         ];
         if (process.env.FRONTEND_URL && !allowedHttpOrigins.includes(process.env.FRONTEND_URL)) {
             allowedHttpOrigins.push(process.env.FRONTEND_URL);
@@ -112,7 +112,7 @@ const httpServer = http.createServer(app);
 // Define las URLs de origen permitidas para Socket.IO
 const frontendDevLocalhostUrlSocket = 'http://localhost:5173';
 // ¡¡¡IMPORTANTE!!! Reemplaza <TU_IP_LOCAL_DE_PC> con la IP local real de tu PC.
-const frontendDevNetworkUrlSocket = `http://192.168.50.195:5173`; // EJ: 'http://192.168.1.100:5173'
+const frontendDevNetworkUrlSocket = `http://192.10.10.150:5173`; // EJ: 'http://192.168.1.100:5173'
 
 const allowedSocketOrigins = [
     frontendDevLocalhostUrlSocket,

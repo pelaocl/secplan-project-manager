@@ -47,6 +47,8 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
   const [firstUnreadMessageIdForDivider, setFirstUnreadMessageIdForDivider] = useState<number | null>(null);
   const [hasScrolledInitially, setHasScrolledInitially] = useState<boolean>(false);
 
+  const [shouldFocusInput, setShouldFocusInput] = useState<boolean>(false);
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ behavior, block: 'end' });
@@ -180,6 +182,12 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
     }, [newMessageText]);
   // --- FIN AJUSTAR ALTURA ---
 
+  useEffect(() => {
+    if (shouldFocusInput) {
+        chatInputRef.current?.focus();
+        setShouldFocusInput(false); // Resetea el flag después de enfocar
+    }
+}, [shouldFocusInput]); // Este efecto se ejecuta cuando shouldFocusInput cambia a true
 
   const handleInsertImageLink = () => {
     const url = prompt("Ingresa la URL de la imagen que deseas adjuntar:");
@@ -195,13 +203,15 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
     const textContent = newMessageText.trim();
     if ((!textContent && !imageToSend) || !currentUser) {
         setError(!textContent && !imageToSend ? "El mensaje no puede estar vacío." : "Usuario no autenticado.");
+        // Re-enfocar si el intento de envío falla por validación temprana
+        setTimeout(() => {
+            chatInputRef.current?.focus();
+        }, 0);
         return;
     }
 
     let htmlContent = "";
     if (textContent) {
-        // Convertir saltos de línea de textarea a <br> y escapar HTML para el texto.
-        // DOMPurify se usará para el contenido final, pero aquí es bueno escapar para construir el <p>
         const escapedText = textContent.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br />");
         htmlContent += `<p>${escapedText}</p>`;
     }
@@ -210,27 +220,38 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
     }
 
     const cleanHtml = DOMPurify.sanitize(htmlContent, { 
-        ALLOWED_TAGS: ['p', 'br', 'img'], // Solo permitimos párrafos, saltos de línea e imágenes
-        ALLOWED_ATTR: ['src', 'alt', 'style'] // Para el estilo inline de la imagen
+        ALLOWED_TAGS: ['p', 'br', 'img'],
+        ALLOWED_ATTR: ['src', 'alt', 'style']
     });
 
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = cleanHtml;
     if (!(tempDiv.textContent || tempDiv.innerText || "").trim() && !cleanHtml.includes("<img")) {
         setError("El mensaje está vacío o solo contiene espacios.");
-        setNewMessageText(''); setImageToSend(null);
+        setNewMessageText(''); 
+        setImageToSend(null);
+        // Re-enfocar si el mensaje estaba vacío después de sanear
+        setTimeout(() => {
+            chatInputRef.current?.focus();
+        }, 0);
         return;
     }
 
-    setIsSending(true); setError(null);
+    setIsSending(true); 
+    setError(null);
     try {
       await chatMessageService.createChatMessage(projectId, taskId, { contenido: cleanHtml });
       setNewMessageText(''); 
       setImageToSend(null);
-      // El scroll se maneja en newMessageHandler para el mensaje propio
-    } catch (err) { console.error("Error enviando mensaje:", err); setError(err instanceof Error ? err.message : "No se pudo enviar el mensaje."); } 
-    finally { setIsSending(false); }
-  };
+      setShouldFocusInput(true);
+        // La llamada a focus() se moverá al bloque finally para asegurar que el input esté habilitado
+    } catch (err) { 
+        console.error("Error enviando mensaje:", err); 
+        setError(err instanceof Error ? err.message : "No se pudo enviar el mensaje.");
+    } finally { 
+        setIsSending(false);
+    }
+};
   
   if (!currentUser) { return <Typography>Debes estar autenticado para participar en el chat.</Typography>; }
 
