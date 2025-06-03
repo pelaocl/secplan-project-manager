@@ -4,65 +4,85 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import http from 'http'; // <--- Usado para crear el servidor HTTP
-import { Server as SocketIOServer, Socket } from 'socket.io'; // <--- Tipos de Socket.IO
-import jwt from 'jsonwebtoken'; // <--- Para verificar JWT en sockets
+import http from 'http';
+import { Server as SocketIOServer, Socket } from 'socket.io';
+import jwt from 'jsonwebtoken';
 
 import authRoutes from './api/authRoutes';
 import projectRoutes from './api/projectRoutes';
 import taskRoutes from './api/taskRoutes';
 import lookupRoutes from './api/lookupRoutes';
-import adminRoutes from './api/adminRoutes'; 
-import tagRoutes from './api/tagRoutes'; 
+import adminRoutes from './api/adminRoutes';
+import tagRoutes from './api/tagRoutes';
 import lookupAdminRoutes from './api/lookupAdminRoutes';
 import adminUserRoutes from './api/adminUserRoutes';
-import { NotFoundError, AppError } from './utils/errors'; 
+import { NotFoundError, AppError } from './utils/errors';
 import prisma from './config/prismaClient';
 
-import { UserPayload } from './types/express'; 
-import { initializeSocketManager } from './socketManager'; 
-import notificationRoutes from './api/notificationRoutes'; // <-- AÑADIR IMPORT
+import { UserPayload } from './types/express';
+import { initializeSocketManager } from './socketManager';
+import notificationRoutes from './api/notificationRoutes';
 
 dotenv.config();
 
 const app: Express = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
-const HOST = '0.0.0.0';
+const HOST = '0.0.0.0'; // El servidor Express escuchará en todas las interfaces
 const API_PREFIX = '/api';
-// Asegúrate de que JWT_SECRET esté definido en tu .env o usa un valor por defecto SEGURO solo para desarrollo.
-const JWT_SECRET = process.env.JWT_SECRET || '8172348712iadwhdiuawdAWDAWED1238791293awdawd'; 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'; // Usaremos esta variable
+const JWT_SECRET = process.env.JWT_SECRET || '8172348712iadwhdiuawdAWDAWED1238791293awdawd';
+
+// URL del frontend para CORS de API HTTP.
+// Para desarrollo, si accedes desde la tablet via IP, esta URL también debería ser la IP.
+// O puedes usar un array de orígenes permitidos aquí también.
+const HTTP_CORS_ORIGIN = process.env.FRONTEND_URL || `http://localhost:5173`;
+
 
 // --- Middlewares ---
-app.use(cors({ 
-    origin: FRONTEND_URL, // Usa la variable para consistencia
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], 
-    allowedHeaders: ['Content-Type', 'Authorization'], 
+app.use(cors({
+    origin: function (origin, callback) {
+        // Para CORS de HTTP, puedes ser más flexible en desarrollo o usar una lista blanca.
+        // Esta configuración permite el FRONTEND_URL y también si el origen es undefined (ej. Postman sin origin)
+        // Para pruebas con la tablet, necesitarás que HTTP_CORS_ORIGIN sea la IP o que permitas múltiples orígenes.
+        // Por ahora, mantenemos la lógica original, pero considera ajustarla si las llamadas API fallan desde la tablet.
+        const allowedHttpOrigins = [
+            `http://localhost:5173`,
+            `http://192.168.50.195:5173` // REEMPLAZA <TU_IP_LOCAL_DE_PC>
+        ];
+        if (process.env.FRONTEND_URL && !allowedHttpOrigins.includes(process.env.FRONTEND_URL)) {
+            allowedHttpOrigins.push(process.env.FRONTEND_URL);
+        }
+        const uniqueAllowedHttpOrigins = [...new Set(allowedHttpOrigins)];
+
+        if (!origin || uniqueAllowedHttpOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`[HTTP CORS] Origen no permitido: ${origin}. Orígenes permitidos para HTTP: ${uniqueAllowedHttpOrigins.join(', ')}`);
+            callback(new Error('Origen no permitido por CORS para API HTTP'));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(helmet()); 
-app.use(express.json()); 
-app.use(express.urlencoded({ extended: true })); 
+app.use(helmet());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 // --- API Routes ---
-app.get('/', (req: Request, res: Response) => { res.send('SECPLAN Project Manager API'); }); 
-app.use(`${API_PREFIX}/auth`, authRoutes); 
-//app.use(`${API_PREFIX}/projects`, projectRoutes); 
-app.use(`${API_PREFIX}/lookups`, lookupRoutes); 
-app.use(`${API_PREFIX}/admin/tags`, tagRoutes); 
-app.use(`${API_PREFIX}/admin/lookups`, lookupAdminRoutes); 
-app.use(`${API_PREFIX}/admin/users`, adminUserRoutes); 
-// Si adminRoutes es una ruta general que agrupa otras, asegúrate que no haya conflictos
-// con las rutas más específicas de arriba. Si es independiente, está bien.
-app.use(`${API_PREFIX}/admin`, adminRoutes); 
-
-app.use(`${API_PREFIX}/projects/:projectId/tasks`, taskRoutes); // Esto requiere que projectIdSchema se valide aquí o en taskRoutes.
+app.get('/', (req: Request, res: Response) => { res.send('SECPLAN Project Manager API'); });
+app.use(`${API_PREFIX}/auth`, authRoutes);
+app.use(`${API_PREFIX}/lookups`, lookupRoutes);
+app.use(`${API_PREFIX}/admin/tags`, tagRoutes);
+app.use(`${API_PREFIX}/admin/lookups`, lookupAdminRoutes);
+app.use(`${API_PREFIX}/admin/users`, adminUserRoutes);
+app.use(`${API_PREFIX}/admin`, adminRoutes);
+app.use(`${API_PREFIX}/projects/:projectId/tasks`, taskRoutes);
 app.use(`${API_PREFIX}/projects`, projectRoutes);
 app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 
 // --- 404 Handler ---
 app.use((req: Request, res: Response, next: NextFunction) => {
-  next(new NotFoundError('Ruta no encontrada'));
+    next(new NotFoundError('Ruta no encontrada'));
 });
 
 // --- Global Error Handler ---
@@ -71,18 +91,14 @@ const globalErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
     if (process.env.NODE_ENV === 'development' && err.stack) {
         console.error(err.stack);
     }
-
     if (err instanceof AppError) {
         res.status(err.statusCode).json({
             status: err.status,
             message: err.message,
             details: err.details,
         });
-        return; 
+        return;
     }
-
-    // TODO: Manejar errores específicos de Prisma (ej. P2002 para unique constraints, P2025 para record not found)
-
     res.status(500).json({
         status: 'error',
         message: 'Error interno del servidor.',
@@ -91,12 +107,35 @@ const globalErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
 app.use(globalErrorHandler);
 
 // --- CONFIGURACIÓN DEL SERVIDOR HTTP Y SOCKET.IO ---
-const httpServer = http.createServer(app); // Crea servidor HTTP desde la app Express
+const httpServer = http.createServer(app);
+
+// Define las URLs de origen permitidas para Socket.IO
+const frontendDevLocalhostUrlSocket = 'http://localhost:5173';
+// ¡¡¡IMPORTANTE!!! Reemplaza <TU_IP_LOCAL_DE_PC> con la IP local real de tu PC.
+const frontendDevNetworkUrlSocket = `http://192.168.50.195:5173`; // EJ: 'http://192.168.1.100:5173'
+
+const allowedSocketOrigins = [
+    frontendDevLocalhostUrlSocket,
+];
+if (frontendDevNetworkUrlSocket.includes('localhost') === false && frontendDevNetworkUrlSocket.startsWith('http://')) {
+    allowedSocketOrigins.push(frontendDevNetworkUrlSocket);
+}
+if (process.env.FRONTEND_URL && !allowedSocketOrigins.includes(process.env.FRONTEND_URL)) {
+    allowedSocketOrigins.push(process.env.FRONTEND_URL);
+}
+const uniqueAllowedSocketOrigins = [...new Set(allowedSocketOrigins)];
 
 const io = new SocketIOServer(httpServer, {
     cors: {
-        origin: FRONTEND_URL, // Permite conexiones desde tu frontend
-        methods: ["GET", "POST"] // Métodos permitidos para la conexión inicial de Socket.IO
+        origin: function (origin, callback) {
+            if (!origin || uniqueAllowedSocketOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                console.warn(`[Socket.IO CORS] Origen no permitido: ${origin}. Orígenes permitidos para Socket.IO: ${uniqueAllowedSocketOrigins.join(', ')}`);
+                callback(new Error('Origen no permitido por CORS para Socket.IO'));
+            }
+        },
+        methods: ["GET", "POST"]
     }
 });
 
@@ -104,107 +143,77 @@ initializeSocketManager(io);
 
 // Middleware de Autenticación para Socket.IO
 io.use((socket: Socket, next) => {
-    const token = socket.handshake.auth.token as string | undefined; // El cliente debería enviar el token aquí
-    
+    const token = socket.handshake.auth.token as string | undefined;
     if (!token) {
         console.log('[Socket.IO Auth] Conexión rechazada: No se proporcionó token.');
         return next(new Error('Autenticación fallida: No hay token.'));
     }
-
     try {
-        const decoded = jwt.verify(token, JWT_SECRET) as UserPayload; // Usa tu tipo UserPayload
-        // Adjuntamos la información del usuario al objeto socket para uso posterior
-        // Definir 'user' en la interfaz Socket es una mejor práctica (ver comentario en respuesta anterior)
-        (socket as any).user = decoded; 
+        const decoded = jwt.verify(token, JWT_SECRET) as UserPayload;
+        (socket as any).user = decoded;
         console.log(`[Socket.IO Auth] Usuario conectado y autenticado via Socket: ID ${decoded.id}, Rol ${decoded.role}`);
-        next(); // Permite la conexión
+        next();
     } catch (err) {
         let errorMessage = 'Autenticación fallida: Token inválido.';
         if (err instanceof Error) {
             errorMessage = `Autenticación fallida: ${err.message}`;
         }
         console.log('[Socket.IO Auth] Conexión rechazada:', errorMessage);
-        next(new Error(errorMessage)); // Rechaza la conexión
+        next(new Error(errorMessage));
     }
 });
 
 // Manejador de Conexiones de Socket.IO
 io.on('connection', (socket: Socket) => {
     const connectedUser = (socket as any).user as UserPayload | undefined;
-
     if (connectedUser) {
         console.log(`[Socket.IO] Nuevo cliente conectado: ${socket.id}, Usuario ID: ${connectedUser.id}, Nombre: ${connectedUser.name || 'N/A'}`);
-
-        // Evento de bienvenida (puedes quitarlo después, es para probar)
         socket.emit('welcome_message', `¡Bienvenido ${connectedUser.name || 'usuario'}! Estás conectado al servidor de notificaciones.`);
-
-        // Ejemplo: Unir al usuario a una "sala" personal basada en su ID
-        // Esto es útil para enviar notificaciones específicas a este usuario.
         socket.join(connectedUser.id.toString());
         console.log(`[Socket.IO] Usuario ID: ${connectedUser.id} unido a la sala personal: ${connectedUser.id.toString()}`);
 
-        // --- Lógica para unirse/dejar salas de chat de tareas ---
         socket.on('join_task_chat_room', (taskId: string | number) => {
-            if (taskId && connectedUser) { // Asegurarse que taskId y user existan
+            if (taskId && connectedUser) {
                 const roomName = `task_chat_${taskId.toString()}`;
                 socket.join(roomName);
                 console.log(`[Socket.IO] Usuario ID: ${connectedUser.id} (Socket: ${socket.id}) se unió a la sala: ${roomName}`);
-                // Podrías emitir un mensaje a la sala confirmando que alguien se unió, si quieres
-                // io.to(roomName).emit('user_joined_chat', { userId: connectedUser.id, userName: connectedUser.name });
             }
         });
-
         socket.on('leave_task_chat_room', (taskId: string | number) => {
-            if (taskId && connectedUser) { // Asegurarse que taskId y user existan
+            if (taskId && connectedUser) {
                 const roomName = `task_chat_${taskId.toString()}`;
                 socket.leave(roomName);
                 console.log(`[Socket.IO] Usuario ID: ${connectedUser.id} (Socket: ${socket.id}) dejó la sala: ${roomName}`);
-                // Podrías emitir un mensaje a la sala confirmando que alguien se fue, si quieres
-                // io.to(roomName).emit('user_left_chat', { userId: connectedUser.id, userName: connectedUser.name });
             }
         });
-
         socket.on('disconnect', (reason) => {
             console.log(`[Socket.IO] Cliente desconectado: ${socket.id}, Usuario ID: ${connectedUser.id}. Razón: ${reason}`);
         });
-
-        // Futuros listeners para eventos específicos de la bitácora irán aquí
-        // ej. socket.on('join_task_room', (taskId) => { socket.join(`task-${taskId}`); });
-
     } else {
-        // Esto no debería suceder si el middleware de autenticación funciona correctamente y siempre adjunta .user
         console.error('[Socket.IO] Conexión establecida pero falta información de usuario en el socket. Desconectando.');
         socket.disconnect(true);
     }
 });
-// --- FIN CONFIGURACIÓN SOCKET.IO ---
-
 
 // --- Start Server & Graceful Shutdown ---
-// Modificamos 'server' para que se refiera a httpServer
-const httpServerInstance = httpServer.listen(PORT, HOST, () => { // Renombrado para evitar conflicto con 'server' de express
-    console.log(`🚀 Servidor HTTP y Socket.IO corriendo en el puerto ${PORT}`); 
+const httpServerInstance = httpServer.listen(PORT, HOST, () => {
+    console.log(`🚀 Servidor HTTP y Socket.IO corriendo en http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT} (accesible en la red local si HOST es 0.0.0.0 y tu IP es conocida)`);
 });
 
-const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT']; // Tipado explícito para signals
-
-const gracefulShutdown = (signal: NodeJS.Signals) => { // Tipado explícito para signal
-  // process.on necesita que el tipo de signal sea NodeJS.Signals o string.
-  // Usamos el tipo más específico NodeJS.Signals aquí.
-  process.on(signal, async () => { 
-    console.info(`\n${signal} signal received: closing HTTP server...`);
-    // Usamos httpServerInstance para cerrar
-    httpServerInstance.close(async () => { 
-      console.info('HTTP server closed.');
-      try {
-        await prisma.$disconnect();
-        console.info('Prisma connection closed.');
-      } catch (e) {
-        console.error('Error closing Prisma connection:', e);
-      }
-      process.exit(0);
+const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
+const gracefulShutdown = (signal: NodeJS.Signals) => {
+    process.on(signal, async () => {
+        console.info(`\n${signal} signal received: closing HTTP server...`);
+        httpServerInstance.close(async () => {
+            console.info('HTTP server closed.');
+            try {
+                await prisma.$disconnect();
+                console.info('Prisma connection closed.');
+            } catch (e) {
+                console.error('Error closing Prisma connection:', e);
+            }
+            process.exit(0);
+        });
     });
-  });
 };
-
 signals.forEach(gracefulShutdown);

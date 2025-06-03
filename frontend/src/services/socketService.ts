@@ -1,4 +1,4 @@
-// frontend/src/services/socketService.ts
+// frontend/src/services/socketService.ts:
 import { io, Socket } from 'socket.io-client';
 
 // La URL base de tu backend donde está corriendo Socket.IO
