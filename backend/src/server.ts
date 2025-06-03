@@ -182,7 +182,7 @@ io.on('connection', (socket: Socket) => {
 
 // --- Start Server & Graceful Shutdown ---
 // Modificamos 'server' para que se refiera a httpServer
-const httpServerInstance = httpServer.listen(PORT, HOST, '0.0.0.0', () => { // Renombrado para evitar conflicto con 'server' de express
+const httpServerInstance = httpServer.listen(PORT, HOST, () => { // Renombrado para evitar conflicto con 'server' de express
     console.log(`🚀 Servidor HTTP y Socket.IO corriendo en el puerto ${PORT}`); 
 });
 

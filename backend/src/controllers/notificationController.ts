@@ -6,11 +6,12 @@ import { GetNotificationsQuery } from '../schemas/notificationSchemas';
 import { BadRequestError } from '../utils/errors';
 
 
-export const getNotificationsHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const getNotificationsHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userPayload = req.user as UserPayload;
         if (!userPayload) {
-            return res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            return;
         }
         
         const query = req.validatedQuery as GetNotificationsQuery;
@@ -24,13 +25,14 @@ export const getNotificationsHandler = async (req: AuthenticatedRequest, res: Re
     }
 };
 
-export const markAsReadHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const markAsReadHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userPayload = req.user as UserPayload;
         const notificationId = parseInt(req.params.notificationId, 10);
 
         if (!userPayload) {
-            return res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            return;
         }
         if (isNaN(notificationId)) {
             throw new BadRequestError("ID de notificación inválido.");
@@ -39,7 +41,8 @@ export const markAsReadHandler = async (req: AuthenticatedRequest, res: Response
         const updatedNotification = await notificationService.markNotificationAsRead(notificationId, userPayload.id);
         if (!updatedNotification) {
             // Esto podría significar que la notificación no existe o no pertenece al usuario
-            return res.status(404).json({ message: "Notificación no encontrada o no tienes permiso." });
+            res.status(404).json({ message: "Notificación no encontrada o no tienes permiso." });
+            return;
         }
         res.status(200).json(updatedNotification);
     } catch (error) {
@@ -47,11 +50,12 @@ export const markAsReadHandler = async (req: AuthenticatedRequest, res: Response
     }
 };
 
-export const markAllAsReadHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const markAllAsReadHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userPayload = req.user as UserPayload;
         if (!userPayload) {
-            return res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            return;
         }
 
         const result = await notificationService.markAllNotificationsAsReadForUser(userPayload.id);
@@ -61,13 +65,14 @@ export const markAllAsReadHandler = async (req: AuthenticatedRequest, res: Respo
     }
 };
 
-export const markTaskChatAsReadHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const markTaskChatAsReadHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userPayload = req.user as UserPayload;
         const taskIdString = req.params.taskId; // Asumimos que taskId vendrá como parámetro de la URL
 
         if (!userPayload) {
-            return res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            return;
         }
         if (!taskIdString) {
             throw new BadRequestError("El ID de la tarea es requerido en la URL.");

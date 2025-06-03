@@ -18,7 +18,7 @@ import {
 import { Role } from '@prisma/client';
 import { z } from 'zod'; // Para inferir tipo
 
-type LookupType = z.infer<typeof validLookupTypes>;
+type LookupType = (typeof validLookupTypes)[number];
 
 const router = express.Router();
 

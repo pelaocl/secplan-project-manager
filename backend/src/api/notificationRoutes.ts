@@ -3,7 +3,7 @@ import express from 'express';
 import { authenticateToken } from '../middlewares/authMiddleware';
 import { validateRequest } from '../middlewares/validationMiddleware';
 import { notificationIdParamSchema, getNotificationsQuerySchema } from '../schemas/notificationSchemas';
-import { taskIdParamSchema } from '../schemas/taskSchemas'; // <-- IMPORTAR taskIdParamSchema
+import { taskIdSchema } from '../schemas/taskSchemas'; // <-- IMPORTAR taskIdSchema
 import * as notificationController from '../controllers/notificationController';
 
 const router = express.Router();
@@ -40,7 +40,7 @@ router.put(
 router.put(
     '/task-chat/:taskId/read-all',
     authenticateToken,
-    validateRequest({ params: taskIdParamSchema }), // Valida que :taskId sea un número
+    validateRequest({ params: taskIdSchema }), // Valida que :taskId sea un número
     notificationController.markTaskChatAsReadHandler
 );
 

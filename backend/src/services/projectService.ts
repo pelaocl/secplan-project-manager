@@ -9,7 +9,7 @@ interface AuthenticatedUser {
     id: number;
     role: Role;
     email?: string; // Opcional
-    name?: string;  // Opcional
+    name?: string | null;  // <--- CAMBIO AQUÍ: Se añade '| null'
 }
 
 // --- Funciones Auxiliares (Helpers) ---
@@ -36,6 +36,12 @@ const parseDateOptional = (value: unknown): Date | null => {
     const date = (value instanceof Date) ? value : new Date(String(value) + 'T00:00:00Z');
     return !isNaN(date.getTime()) ? date : null;
 };
+
+const parseFloatOptional = (value: unknown): number | null => {
+        if (value == null || value === '') return null;
+        const num = Number(typeof value === 'string' ? value.replace(',', '.') : value);
+        return !isNaN(num) && num >= 0 ? num : null; // Devuelve number
+    };
 
 // --- Helper para Seleccionar Campos ---
 // Define qué campos devolver según si el usuario está autenticado
@@ -233,8 +239,8 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
         nombre: data.nombre,
         descripcion: data.descripcion ?? null,
         direccion: data.direccion ?? null,
-        superficieTerreno: parseDecimalOptional(data.superficieTerreno),
-        superficieEdificacion: parseDecimalOptional(data.superficieEdificacion),
+        superficieTerreno: parseFloatOptional(data.superficieTerreno),
+        superficieEdificacion: parseFloatOptional(data.superficieEdificacion),
         ano: parseIntAno(data.ano),
         proyectoPriorizado: data.proyectoPriorizado ?? false,
         tipoMoneda: data.tipoMoneda ?? TipoMoneda.CLP, // Default a CLP si no se especifica
@@ -244,8 +250,8 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
         montoAdjudicado: parseDecimalOptional(data.montoAdjudicado),
         codigoLicitacion: data.codigoLicitacion ?? null,
 
-        location_point: data.location_point, // Asigna directamente el objeto GeoJSON o null/undefined
-        area_polygon: data.area_polygon,   // Asigna directamente el objeto GeoJSON o null/undefined
+        location_point: data.location_point === null ? Prisma.DbNull : (data.location_point as Prisma.InputJsonObject),
+        area_polygon: data.area_polygon === null ? Prisma.DbNull : (data.area_polygon as Prisma.InputJsonObject),
 
         // --- Conexiones a relaciones ---
         tipologia: { connect: { id: data.tipologiaId } }, // Requerido
@@ -341,8 +347,8 @@ export const updateProject = async (id: number, data: UpdateProjectInput, user: 
     if ('codigoLicitacion' in data) updateData.codigoLicitacion = data.codigoLicitacion; // Permite setear a null
 
     // Campos numéricos/decimales parseados
-    if ('superficieTerreno' in data) updateData.superficieTerreno = parseDecimalOptional(data.superficieTerreno);
-    if ('superficieEdificacion' in data) updateData.superficieEdificacion = parseDecimalOptional(data.superficieEdificacion);
+    if ('superficieTerreno' in data) updateData.superficieTerreno = parseFloatOptional (data.superficieTerreno);
+    if ('superficieEdificacion' in data) updateData.superficieEdificacion = parseFloatOptional (data.superficieEdificacion);
     if ('monto' in data) updateData.monto = parseDecimalOptional(data.monto);
     if ('montoAdjudicado' in data) updateData.montoAdjudicado = parseDecimalOptional(data.montoAdjudicado);
 
@@ -350,10 +356,10 @@ export const updateProject = async (id: number, data: UpdateProjectInput, user: 
     if ('fechaPostulacion' in data) updateData.fechaPostulacion = parseDateOptional(data.fechaPostulacion);
 
     if ('location_point' in data) {
-        updateData.location_point = data.location_point; // Puede ser el objeto GeoJSON o null
+        updateData.location_point = data.location_point === null ? Prisma.DbNull : (data.location_point as Prisma.InputJsonObject);
     }
     if ('area_polygon' in data) {
-        updateData.area_polygon = data.area_polygon;   // Puede ser el objeto GeoJSON o null
+        updateData.area_polygon = data.area_polygon === null ? Prisma.DbNull : (data.area_polygon as Prisma.InputJsonObject);
     }
  
     // --- Manejo de Relaciones ---

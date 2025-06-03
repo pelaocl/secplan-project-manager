@@ -78,7 +78,8 @@ export const updateTagHandler = async (req: Request, res: Response, next: NextFu
 
         // Validar que el cuerpo no esté totalmente vacío si partial() lo permitiera
         if (Object.keys(validatedData).length === 0) {
-             return res.status(400).json({ status: 'fail', message: 'Se requiere al menos un campo (nombre o color) para actualizar.' });
+             res.status(400).json({ status: 'fail', message: 'Se requiere al menos un campo (nombre o color) para actualizar.' });
+             return;
         }
 
         const updatedTag = await tagService.updateTag(tagId, validatedData);

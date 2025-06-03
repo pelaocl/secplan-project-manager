@@ -6,7 +6,7 @@ import { validLookupTypes } from '../schemas/lookupAdminSchemas'; // Importa los
 import { NotFoundError, BadRequestError, AppError } from '../utils/errors';
 
 // Tipado para asegurar que lookupType es uno de los valores válidos
-type LookupType = typeof validLookupTypes.enum[keyof typeof validLookupTypes.enum];
+type LookupType = (typeof validLookupTypes)[number];
 
 // Mapeo de los tipos de lookup de la URL a los nombres de modelo de Prisma
 // y a los campos únicos que necesitan chequeo case-insensitive

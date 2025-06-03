@@ -1,11 +1,11 @@
 // backend/src/controllers/chatMessageController.ts
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest, UserPayload } from '../types/express';
-import { CreateChatMessageInput } from '../schemas/chatMessageSchemas';
+import { CreateChatMessageInput, GetChatMessagesQuery } from '../schemas/chatMessageSchemas';
 import { chatMessageService } from '../services/chatMessageService'; // Asumiendo que exportas un objeto
 import { BadRequestError } from '../utils/errors';
 
-export const createMessageHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const createMessageHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const taskIdString = req.params.taskId; // taskId vendrá de la ruta /tasks/:taskId/messages
         const remitentePayload = req.user as UserPayload;
@@ -13,7 +13,8 @@ export const createMessageHandler = async (req: AuthenticatedRequest, res: Respo
 
         if (!remitentePayload) {
             // Aunque authenticateToken debería manejar esto, una doble verificación.
-            return res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            return;
         }
 
         if (!taskIdString) {
@@ -32,14 +33,15 @@ export const createMessageHandler = async (req: AuthenticatedRequest, res: Respo
     }
 };
 
-export const getMessagesByTaskHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const getMessagesByTaskHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const taskIdString = req.params.taskId;
         const remitentePayload = req.user as UserPayload; // Usuario que solicita los mensajes
         const queryParams = req.validatedQuery as GetChatMessagesQuery; // Validado por middleware
 
         if (!remitentePayload) {
-            return res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            return;
         }
         if (!taskIdString) {
             throw new BadRequestError("El ID de la tarea es requerido en la URL.");

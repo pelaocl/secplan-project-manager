@@ -75,7 +75,7 @@ export const createUserHandler = async (req: Request, res: Response, next: NextF
 /**
  * Handler para ADMIN: Actualizar un usuario existente.
  */
-export const updateUserHandler = async (req: Request, res: Response, next: NextFunction) => {
+export const updateUserHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { params, body } = getValidatedData(req);
         const userId = params.id as number;
@@ -83,7 +83,8 @@ export const updateUserHandler = async (req: Request, res: Response, next: NextF
 
         // Evita llamadas con cuerpo vacío
         if (Object.keys(validatedData).length === 0) {
-            return res.status(400).json({ status: 'fail', message: 'Se requiere al menos un campo para actualizar.' });
+            res.status(400).json({ status: 'fail', message: 'Se requiere al menos un campo para actualizar.' });
+            return;
         }
 
         const updatedUser = await adminUserService.updateUser(userId, validatedData);

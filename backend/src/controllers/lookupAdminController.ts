@@ -6,7 +6,7 @@ import { validLookupTypes } from '../schemas/lookupAdminSchemas'; // Importa la 
 import { z } from 'zod'; // Para inferir el tipo LookupType
 
 // Infiere el tipo específico para lookupType desde el schema Zod
-type LookupType = z.infer<typeof validLookupTypes>;
+type LookupType = (typeof validLookupTypes)[number];
 
 // Helper para obtener datos validados (asume que el middleware los adjunta)
 const getValidatedData = (req: Request) => {
@@ -100,7 +100,7 @@ export const createLookupHandler = async (req: Request, res: Response, next: Nex
  * Handler para ACTUALIZAR un registro por ID para un tipo de lookup específico.
  * El tipo y el ID vienen en req.params, los datos vienen en req.body.
  */
-export const updateLookupHandler = async (req: Request, res: Response, next: NextFunction) => {
+export const updateLookupHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { params, body } = getValidatedData(req);
         const lookupType = params.lookupType as LookupType;
@@ -109,7 +109,8 @@ export const updateLookupHandler = async (req: Request, res: Response, next: Nex
 
         // Evita enviar un cuerpo vacío
         if (Object.keys(validatedData).length === 0) {
-            return res.status(400).json({ status: 'fail', message: 'Se requiere al menos un campo para actualizar.' });
+            res.status(400).json({ status: 'fail', message: 'Se requiere al menos un campo para actualizar.' });
+            return;
         }
 
         const updatedRecord = await lookupAdminService.update(lookupType, id, validatedData);

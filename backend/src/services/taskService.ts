@@ -6,7 +6,7 @@ import {
     Role, 
     User as PrismaUser, 
     Project as PrismaProject,
-    Task as PrismaTask,
+    Tarea,
     TipoNotificacion,
     TipoRecursoNotificacion,
     EstadoTarea, // Asegúrate que EstadoTarea esté importado si lo usas
@@ -17,7 +17,7 @@ import { UserPayload } from '../types/express';
 import { notificationService } from './notificationService';
 
 // Tipo para la tarea que incluye el nuevo flag y las relaciones seleccionadas
-export type TaskWithChatStatusAndDetails = PrismaTask & { 
+export type TaskWithChatStatusAndDetails = Tarea & { 
     tieneMensajesNuevosEnChat?: boolean;
     creador?: { id: number; name: string | null; email: string; role: Role; } | null;
     asignado?: { id: number; name: string | null; email: string; role: Role; } | null;
@@ -71,7 +71,7 @@ export const createTask = async (
     projectId: number,
     data: CreateTaskInput,
     creatorPayload: UserPayload 
-): Promise<PrismaTask> => { // Devuelve el tipo PrismaTask, el include define lo que trae
+): Promise<Tarea> => { // Devuelve el tipo Tarea, el include define lo que trae
     const project = await prisma.project.findUnique({ 
         where: { id: projectId },
         select: { id: true, nombre: true, codigoUnico: true, proyectistaId: true } 
@@ -221,7 +221,7 @@ export const getTaskById = async (
     projectId: number,
     taskId: number,
     requestingUserPayload: UserPayload
-): Promise<PrismaTask | null> => { // Devuelve PrismaTask que incluye relaciones según el include
+): Promise<Tarea | null> => { // Devuelve Task que incluye relaciones según el include
     await checkProjectAccess(projectId, requestingUserPayload);
 
     const task = await prisma.tarea.findUnique({
@@ -254,7 +254,7 @@ export const updateTask = async (
     taskId: number,
     data: UpdateTaskInput,
     requestingUserPayload: UserPayload
-): Promise<PrismaTask> => {
+): Promise<Tarea> => {
     await checkProjectAccess(projectId, requestingUserPayload);
 
     const existingTask = await prisma.tarea.findUnique({
@@ -284,8 +284,9 @@ export const updateTask = async (
                 throw new ForbiddenError(`No tienes permiso para actualizar el campo '${key}'.`);
             }
         }
-        if (data.estado && isAssignee && ![EstadoTarea.COMPLETADA, EstadoTarea.EN_REVISION, EstadoTarea.EN_PROGRESO, EstadoTarea.PENDIENTE].includes(data.estado)) {
-             throw new ForbiddenError(`Como asignado, solo puedes cambiar el estado a valores permitidos.`);
+        const allowedUpdateStatesForAssignee: EstadoTarea[] = [EstadoTarea.COMPLETADA, EstadoTarea.EN_REVISION, EstadoTarea.EN_PROGRESO, EstadoTarea.PENDIENTE];
+        if (data.estado && isAssignee && !allowedUpdateStatesForAssignee.includes(data.estado)) {
+            throw new ForbiddenError(`Como asignado, solo puedes cambiar el estado a valores permitidos.`);
         }
     }
     
@@ -331,7 +332,7 @@ export const updateTask = async (
     });
 
 
-    let notificationType = TipoNotificacion.TAREA_ACTUALIZADA_INFO;
+    let notificationType: TipoNotificacion = TipoNotificacion.TAREA_ACTUALIZADA_INFO;
     let changeDescription = "La tarea ha sido actualizada.";
 
     if (data.estado && data.estado !== existingTask.estado) {

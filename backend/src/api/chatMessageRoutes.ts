@@ -4,7 +4,7 @@ import { authenticateToken } from '../middlewares/authMiddleware';
 import { validateRequest } from '../middlewares/validationMiddleware';
 import { createChatMessageSchema, getChatMessagesSchema } // Asegúrate que getChatMessagesSchema exista
     from '../schemas/chatMessageSchemas'; 
-import { taskIdParamSchema } from '../schemas/taskSchemas'; // Reutilizamos taskIdParamSchema
+import { taskIdSchema } from '../schemas/taskSchemas'; // Reutilizamos taskIdSchema
 import * as chatMessageController from '../controllers/chatMessageController';
 
 // { mergeParams: true } es crucial para que este router pueda acceder a los parámetros

@@ -2,7 +2,7 @@ import { Request } from 'express';
 import { Role } from '@prisma/client';
 
 // Define la estructura del payload que añadiremos a req.user
-interface UserPayload {
+export interface UserPayload {
     id: number;
     role: Role;
     name?: string | null;
