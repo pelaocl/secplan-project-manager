@@ -12,10 +12,8 @@ import PersonIcon from '@mui/icons-material/Person'; // Para el Avatar fallback
 // Importa los hooks/selectores necesarios de tu store Zustand
 import { useIsAuthenticated, useCurrentUser, useAuthActions, useCurrentUserRole } from '../../store/authStore';
 // import { UserRole } from '../../types'; // UserRole no se usa directamente aquí si useCurrentUserRole lo devuelve bien
-
-// --- AÑADIR IMPORT PARA NOTIFICATIONBELL ---
 import NotificationBell from './NotificationBell'; 
-// -----------------------------------------
+import DashboardIcon from '@mui/icons-material/Dashboard';
 
 
 // Helper para obtener iniciales del nombre (simple)
@@ -70,11 +68,25 @@ function TopAppBar() {
     return (
         <AppBar position="static" elevation={1} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}> {/* Asegurar que esté sobre el drawer si tienes uno */}
             <Toolbar>
-                <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                    <RouterLink to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-                        SECPLAN - Gestor de Proyectos
-                    </RouterLink>
-                </Typography>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                <RouterLink to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+                    SECPLAN - Gestor de Proyectos
+                </RouterLink>
+            </Typography>
+
+            <Box sx={{ flexGrow: 0, display: { xs: 'none', md: 'flex' }, gap: 1 }}>
+                {(userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
+                    <Button
+                        component={RouterLink}
+                        to="/dashboard"
+                        color="inherit"
+                        startIcon={<DashboardIcon />}
+                    >
+                        Dashboard
+                    </Button>
+                )}
+                {/* Aquí podrías añadir en el futuro el botón "Mis Tareas" */}
+            </Box>
 
                 {isAuthenticated && currentUser ? (
                     <Stack direction="row" spacing={1} alignItems="center"> {/* Reducido spacing a 1 para acomodar campana */}

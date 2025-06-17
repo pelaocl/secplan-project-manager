@@ -22,6 +22,7 @@ import prisma from './config/prismaClient';
 import { UserPayload } from './types/express';
 import { initializeSocketManager } from './socketManager';
 import notificationRoutes from './api/notificationRoutes';
+import statsRoutes from './api/statsRoutes';
 
 dotenv.config();
 
@@ -79,6 +80,7 @@ app.use(`${API_PREFIX}/admin`, adminRoutes);
 app.use(`${API_PREFIX}/projects/:projectId/tasks`, taskRoutes);
 app.use(`${API_PREFIX}/projects`, projectRoutes);
 app.use(`${API_PREFIX}/notifications`, notificationRoutes);
+app.use(`${API_PREFIX}/stats`, statsRoutes);
 
 // --- 404 Handler ---
 app.use((req: Request, res: Response, next: NextFunction) => {

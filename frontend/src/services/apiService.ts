@@ -1,4 +1,4 @@
-// frontend/src/services/apiService.ts (LIMPIO)
+// frontend/src/services/apiService.ts
 import { useAuthStore } from '../store/authStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
