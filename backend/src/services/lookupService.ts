@@ -1,3 +1,4 @@
+//backend/src/services/lookupService.ts
 import prisma from '../config/prismaClient';
 
 // Servicio para obtener opciones de formularios (Lookups)

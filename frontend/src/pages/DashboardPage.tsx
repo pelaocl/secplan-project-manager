@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Typography, Container, CircularProgress, Alert, Grid } from '@mui/material';
 import { statsApi, DashboardData } from '../api/statsApi';
+import { lookupApi, LookupDataResponse } from '../api/lookupApi'; // Importar lookupApi
+import DashboardFilters, { Filters } from '../components/dashboard/DashboardFilters'; // Importar componente y tipo de filtros
 
 // Importar todos los componentes de gráficos
 import MontoPorTipologiaChart from '../components/dashboard/MontoPorTipologiaChart';
@@ -10,36 +12,70 @@ import ProyectosPorUnidadChart from '../components/dashboard/ProyectosPorUnidadC
 import ProyectosPorSectorChart from '../components/dashboard/ProyectosPorSectorChart';
 import SuperficiePorTipologiaChart from '../components/dashboard/SuperficiePorTipologiaChart';
 
+const initialFilters: Filters = {
+  ano: '',
+  tipologiaId: '',
+  estadoId: '',
+  unidadId: '',
+};
+
 function DashboardPage() {
     const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    
+    // Estados para los filtros
+    const [lookupOptions, setLookupOptions] = useState<LookupDataResponse | null>(null);
+    const [filters, setFilters] = useState<Filters>(initialFilters);
+
+    const fetchData = useCallback(async (currentFilters: Filters) => {
+      try {
+        setLoading(true);
+        setError(null);
+        // Obtener los datos de lookup solo la primera vez o si no existen
+        if (!lookupOptions) {
+          const lookups = await lookupApi.getLookupData();
+          setLookupOptions(lookups);
+        }
+        // Obtener los datos del dashboard con los filtros actuales
+        const data = await statsApi.getDashboardData(currentFilters);
+        setDashboardData(data);
+        console.log("Datos del Dashboard recibidos:", data);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Ocurrió un error desconocido.";
+        setError(errorMessage);
+        console.error("Error en DashboardPage:", err);
+      } finally {
+        setLoading(false);
+      }
+    }, [lookupOptions]); // Dependencia de lookupOptions para evitar recargarlos si ya existen
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const data = await statsApi.getDashboardData();
-                setDashboardData(data);
-                console.log("Datos del Dashboard recibidos en el frontend:", data);
-            } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : "Ocurrió un error desconocido.";
-                setError(errorMessage);
-                console.error("Error en DashboardPage:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
+        fetchData(filters);
+    }, []); // Carga inicial con los filtros por defecto
 
-        fetchData();
-    }, []); // El array vacío asegura que esto se ejecute solo una vez al montar el componente
+    const handleApplyFilters = () => {
+      fetchData(filters);
+    };
+
+    const handleClearFilters = () => {
+      setFilters(initialFilters);
+      fetchData(initialFilters);
+    };
 
     return (
         <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
+            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
                 Dashboard de Estadísticas
             </Typography>
+
+            <DashboardFilters
+              filters={filters}
+              onFilterChange={setFilters}
+              onApplyFilters={handleApplyFilters}
+              onClearFilters={handleClearFilters}
+              lookupData={lookupOptions}
+            />
 
             {loading && (
                 <Box display="flex" justifyContent="center" alignItems="center" sx={{ height: '50vh' }}>
@@ -56,9 +92,7 @@ function DashboardPage() {
 
             {!loading && !error && dashboardData && (
                 <Box>
-                    {/* --- LAYOUT DEL DASHBOARD CON TODOS LOS GRÁFICOS --- */}
                     <Grid container spacing={3}>
-
                         {/* === Categoría Financiero === */}
                         <Grid item xs={12}>
                             <Typography variant="h5" component="h2" gutterBottom>Análisis Financiero</Typography>
@@ -94,7 +128,6 @@ function DashboardPage() {
                         <Grid item xs={12} lg={6}>
                             <SuperficiePorTipologiaChart data={dashboardData.geografico.superficiePorTipologia} />
                         </Grid>
-
                     </Grid>
                 </Box>
             )}

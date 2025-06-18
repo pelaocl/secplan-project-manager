@@ -1,99 +1,86 @@
 import { Prisma, EstadoTarea } from '@prisma/client';
 import prisma from '../config/prismaClient';
+import { DashboardFilters } from '../schemas/statsSchemas';
 
-/**
- * Calcula la suma total de montos de proyectos, agrupados por tipología.
- * Devuelve un array con el nombre de la tipología y el monto total.
- */
-async function getMontoPorTipologia() {
-    // 1. Agrupar proyectos por tipologiaId y sumar sus montos.
+// --- Helper para construir la cláusula 'where' base ---
+const buildBaseProjectWhereClause = (filters: DashboardFilters): Prisma.ProjectWhereInput => {
+    const where: Prisma.ProjectWhereInput = {};
+
+    if (filters.ano) {
+        where.ano = filters.ano;
+    }
+    if (filters.tipologiaId) {
+        where.tipologiaId = filters.tipologiaId;
+    }
+    if (filters.estadoId) {
+        where.estadoId = filters.estadoId;
+    }
+    if (filters.unidadId) {
+        where.unidadId = filters.unidadId;
+    }
+    
+    return where;
+};
+
+
+async function getMontoPorTipologia(filters: DashboardFilters) {
+    const whereClause = buildBaseProjectWhereClause(filters);
+    
     const montoAgrupado = await prisma.project.groupBy({
         by: ['tipologiaId'],
         _sum: {
             monto: true,
         },
-        where: {
-            // Opcional: podrías filtrar por proyectos que no estén en ciertos estados, ej. Cancelado
-            // estado: {
-            //   nombre: { not: 'Cancelado' }
-            // }
-        }
+        where: whereClause,
     });
 
-    // 2. Obtener los IDs de las tipologías de los resultados.
+    if (montoAgrupado.length === 0) return [];
     const tipologiaIds = montoAgrupado.map(item => item.tipologiaId);
 
-    // 3. Buscar los nombres de esas tipologías.
     const tipologias = await prisma.tipologiaProyecto.findMany({
-        where: {
-            id: { in: tipologiaIds },
-        },
-        select: {
-            id: true,
-            nombre: true,
-        },
+        where: { id: { in: tipologiaIds } },
+        select: { id: true, nombre: true },
     });
 
-    // 4. Crear un mapa para buscar nombres por ID eficientemente.
     const tipologiaMap = new Map(tipologias.map(t => [t.id, t.nombre]));
 
-    // 5. Formatear el resultado final para el frontend.
     const resultadoFormateado = montoAgrupado.map(item => ({
-        name: tipologiaMap.get(item.tipologiaId) || 'Sin Tipología', // Nombre de la tipología
-        value: item._sum.monto?.toNumber() || 0, // Suma del monto convertida a número
-    })).sort((a, b) => b.value - a.value); // Ordenar de mayor a menor monto
+        name: tipologiaMap.get(item.tipologiaId) || 'Sin Tipología',
+        value: item._sum.monto?.toNumber() || 0,
+    })).sort((a, b) => b.value - a.value);
 
     return resultadoFormateado;
 }
 
-/**
- * Calcula la suma de montos de proyectos, agrupados por programa,
- * e incluye el nombre de la línea de financiamiento a la que pertenece cada programa.
- */
-async function getInversionPorPrograma() {
-    // 1. Agrupar proyectos por programaId y sumar sus montos.
+
+async function getInversionPorPrograma(filters: DashboardFilters) {
+    const whereClause = buildBaseProjectWhereClause(filters);
+    whereClause.programaId = { not: null };
+    whereClause.monto = { not: null };
+
     const inversionAgrupada = await prisma.project.groupBy({
         by: ['programaId'],
         _sum: {
             monto: true,
         },
-        where: {
-            programaId: {
-                not: null,
-            },
-            monto: {
-                not: null,
-            }
-        },
+        where: whereClause,
     });
 
     if (inversionAgrupada.length === 0) return [];
-
     const programaIds = inversionAgrupada.map(item => item.programaId!);
 
-    // 2. Buscar los detalles de esos programas, incluyendo la línea de financiamiento relacionada.
     const programas = await prisma.programa.findMany({
-        where: {
-            id: { in: programaIds },
-        },
-        include: {
-            lineaFinanciamiento: { // Incluimos la relación para obtener su nombre
-                select: {
-                    nombre: true,
-                },
-            },
-        },
+        where: { id: { in: programaIds } },
+        include: { lineaFinanciamiento: { select: { nombre: true } } },
     });
 
-    // 3. Crear un mapa para buscar detalles por ID eficientemente.
     const programaMap = new Map(programas.map(p => [p.id, p]));
 
-    // 4. Formatear el resultado final para el frontend.
     const resultadoFormateado = inversionAgrupada.map(item => {
         const programaInfo = programaMap.get(item.programaId!);
         const programaNombre = programaInfo?.nombre || 'Programa Desconocido';
         const lineaNombre = programaInfo?.lineaFinanciamiento?.nombre || 'N/A';
-
+        
         return {
             name: `${programaNombre} (${lineaNombre})`,
             value: item._sum.monto?.toNumber() || 0,
@@ -103,39 +90,28 @@ async function getInversionPorPrograma() {
     return resultadoFormateado;
 }
 
-/**
- * Calcula la cantidad de tareas activas agrupadas por usuario asignado.
- */
-async function getTareasActivasPorUsuario() {
+
+async function getTareasActivasPorUsuario(filters: DashboardFilters) {
+    const whereClause: Prisma.TareaWhereInput = {
+        asignadoId: { not: null },
+        estado: { notIn: [EstadoTarea.COMPLETADA, EstadoTarea.CANCELADA] },
+        // --- CORRECCIÓN AQUÍ ---
+        // Se cambió 'project' por 'proyecto' para que coincida con el schema de Prisma
+        proyecto: buildBaseProjectWhereClause(filters)
+    };
+    
     const tareasAgrupadas = await prisma.tarea.groupBy({
         by: ['asignadoId'],
-        _count: {
-            id: true,
-        },
-        where: {
-            asignadoId: {
-                not: null, // Solo tareas que tienen a alguien asignado
-            },
-            // Contamos solo tareas activas
-            estado: {
-                notIn: [EstadoTarea.COMPLETADA, EstadoTarea.CANCELADA],
-            },
-        },
+        _count: { id: true },
+        where: whereClause,
     });
 
     if (tareasAgrupadas.length === 0) return [];
-
     const userIds = tareasAgrupadas.map(item => item.asignadoId!);
 
     const usuarios = await prisma.user.findMany({
-        where: {
-            id: { in: userIds },
-        },
-        select: {
-            id: true,
-            name: true,
-            email: true,
-        },
+        where: { id: { in: userIds } },
+        select: { id: true, name: true, email: true },
     });
 
     const userMap = new Map(usuarios.map(u => [u.id, u.name || u.email]));
@@ -148,34 +124,23 @@ async function getTareasActivasPorUsuario() {
     return resultadoFormateado;
 }
 
-/**
- * Calcula la cantidad de proyectos agrupados por unidad municipal.
- */
-async function getProyectosPorUnidad() {
+
+async function getProyectosPorUnidad(filters: DashboardFilters) {
+    const whereClause = buildBaseProjectWhereClause(filters);
+    whereClause.unidadId = { not: null };
+
     const proyectosAgrupados = await prisma.project.groupBy({
         by: ['unidadId'],
-        _count: {
-            id: true,
-        },
-        where: {
-            unidadId: {
-                not: null,
-            },
-        },
+        _count: { id: true },
+        where: whereClause,
     });
-
+    
     if (proyectosAgrupados.length === 0) return [];
-
     const unidadIds = proyectosAgrupados.map(item => item.unidadId!);
 
     const unidades = await prisma.unidadMunicipal.findMany({
-        where: {
-            id: { in: unidadIds },
-        },
-        select: {
-            id: true,
-            nombre: true,
-        },
+        where: { id: { in: unidadIds } },
+        select: { id: true, nombre: true },
     });
 
     const unidadMap = new Map(unidades.map(u => [u.id, u.nombre]));
@@ -188,67 +153,53 @@ async function getProyectosPorUnidad() {
     return resultadoFormateado;
 }
 
-/**
- * Calcula la cantidad de proyectos agrupados por sector.
- */
-async function getProyectosPorSector() {
+
+async function getProyectosPorSector(filters: DashboardFilters) {
+    const whereClause = buildBaseProjectWhereClause(filters);
+    whereClause.sectorId = { not: null };
+
     const proyectosAgrupados = await prisma.project.groupBy({
         by: ['sectorId'],
-        _count: {
-            id: true, // Contamos proyectos por su ID
-        },
-        where: {
-            sectorId: {
-                not: null, // Ignoramos proyectos sin sector asignado
-            },
-        },
+        _count: { id: true },
+        where: whereClause,
     });
 
     if (proyectosAgrupados.length === 0) return [];
-
     const sectorIds = proyectosAgrupados.map(item => item.sectorId!);
 
     const sectores = await prisma.sector.findMany({
-        where: {
-            id: { in: sectorIds },
-        },
-        select: {
-            id: true,
-            nombre: true,
-        },
+        where: { id: { in: sectorIds } },
+        select: { id: true, nombre: true },
     });
 
     const sectorMap = new Map(sectores.map(s => [s.id, s.nombre]));
 
     const resultadoFormateado = proyectosAgrupados.map(item => ({
         name: sectorMap.get(item.sectorId!) || 'Sin Sector Asignado',
-        value: item._count.id, // El valor es la cantidad de proyectos
+        value: item._count.id,
     })).sort((a, b) => b.value - a.value);
 
     return resultadoFormateado;
 }
 
-/**
- * Calcula la suma de superficies (terreno y edificación) por tipología de proyecto.
- */
-async function getSuperficiePorTipologia() {
+
+async function getSuperficiePorTipologia(filters: DashboardFilters) {
+    const whereClause = buildBaseProjectWhereClause(filters);
+    whereClause.OR = [
+        { superficieTerreno: { gt: 0 } },
+        { superficieEdificacion: { gt: 0 } },
+    ];
+    
     const superficieAgrupada = await prisma.project.groupBy({
         by: ['tipologiaId'],
         _sum: {
             superficieTerreno: true,
             superficieEdificacion: true,
         },
-        where: {
-            // Consideramos solo proyectos que tengan al menos una de las dos superficies
-            OR: [
-                { superficieTerreno: { gt: 0 } },
-                { superficieEdificacion: { gt: 0 } },
-            ]
-        }
+        where: whereClause,
     });
 
     if (superficieAgrupada.length === 0) return [];
-
     const tipologiaIds = superficieAgrupada.map(item => item.tipologiaId);
 
     const tipologias = await prisma.tipologiaProyecto.findMany({
@@ -267,11 +218,8 @@ async function getSuperficiePorTipologia() {
     return resultadoFormateado;
 }
 
-/**
- * Función principal que recopila todas las estadísticas para el dashboard.
- * En el futuro, llamará a otras funciones de estadísticas aquí.
- */
-export async function getDashboardData() {
+
+export async function getDashboardData(filters: DashboardFilters) {
     const [
         montoPorTipologia,
         inversionPorPrograma,
@@ -280,12 +228,12 @@ export async function getDashboardData() {
         proyectosPorSector,
         superficiePorTipologia,
     ] = await Promise.all([
-        getMontoPorTipologia(),
-        getInversionPorPrograma(),
-        getTareasActivasPorUsuario(),
-        getProyectosPorUnidad(),
-        getProyectosPorSector(),
-        getSuperficiePorTipologia(),
+        getMontoPorTipologia(filters),
+        getInversionPorPrograma(filters),
+        getTareasActivasPorUsuario(filters),
+        getProyectosPorUnidad(filters),
+        getProyectosPorSector(filters),
+        getSuperficiePorTipologia(filters),
     ]);
 
     return {

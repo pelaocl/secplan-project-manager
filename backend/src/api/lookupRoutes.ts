@@ -1,3 +1,4 @@
+//backend/src/api/lookupRoutes.ts
 import express from 'express';
 import * as lookupController from '../controllers/lookupController'; // Asegúrate que exista y exporte
 import { authenticateToken } from '../middlewares/authMiddleware';
