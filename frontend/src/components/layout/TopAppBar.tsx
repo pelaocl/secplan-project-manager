@@ -1,32 +1,33 @@
-// frontend/src/components/layout/TopAppBar.tsx
 import React, { useState } from 'react';
 import {
-    AppBar, Toolbar, Typography, Button, Box, Stack, Avatar, /* Chip, */ Tooltip, IconButton, Menu, MenuItem, useTheme // Chip no se usaba aquí
+    AppBar, Toolbar, Typography, Button, Box, Stack, Avatar, Tooltip, IconButton, Menu, MenuItem, useTheme
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+
+// --- Iconos ---
 import LogoutIcon from '@mui/icons-material/Logout';
-// import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // No se usaba, PersonIcon se usa en Avatar
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import PersonIcon from '@mui/icons-material/Person'; // Para el Avatar fallback
-
-// Importa los hooks/selectores necesarios de tu store Zustand
-import { useIsAuthenticated, useCurrentUser, useAuthActions, useCurrentUserRole } from '../../store/authStore';
-// import { UserRole } from '../../types'; // UserRole no se usa directamente aquí si useCurrentUserRole lo devuelve bien
-import NotificationBell from './NotificationBell'; 
+import PersonIcon from '@mui/icons-material/Person';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import HomeIcon from '@mui/icons-material/Home'; // <--- NUEVO ÍCONO PARA INICIO
 
+// --- Store de Autenticación ---
+import { useIsAuthenticated, useCurrentUser, useAuthActions, useCurrentUserRole } from '../../store/authStore';
 
-// Helper para obtener iniciales del nombre (simple)
+// --- Otros Componentes ---
+import NotificationBell from './NotificationBell';
+
+// --- Helper para Iniciales ---
 const getInitials = (name?: string | null): string => {
     if (!name) return '?';
     const names = name.trim().split(' ');
-    if (names.length === 0 || names[0] === '') return '?'; // Manejar string vacío o solo espacios
+    if (names.length === 0 || names[0] === '') return '?';
     
     if (names.length > 1 && names[0] && names[names.length - 1]) {
         const firstInitial = names[0][0];
         const lastInitial = names[names.length - 1][0];
-        if (firstInitial && lastInitial) { // Asegurarse de que las iniciales no sean undefined
-             return `${firstInitial}${lastInitial}`.toUpperCase();
+        if (firstInitial && lastInitial) {
+            return `${firstInitial}${lastInitial}`.toUpperCase();
         } else if (firstInitial) {
             return firstInitial.toUpperCase();
         }
@@ -66,51 +67,57 @@ function TopAppBar() {
     };
 
     return (
-        <AppBar position="static" elevation={1} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}> {/* Asegurar que esté sobre el drawer si tienes uno */}
+        <AppBar position="static" elevation={1} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                <RouterLink to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-                    SECPLAN - Gestor de Proyectos
-                </RouterLink>
-            </Typography>
+                {/* --- INICIO: NUEVO MENÚ DE NAVEGACIÓN A LA IZQUIERDA --- */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {/* Botón de Inicio */}
+                    <Tooltip title="Ir al Listado de Proyectos">
+                        <IconButton component={RouterLink} to="/" color="inherit" aria-label="ir a inicio">
+                            <HomeIcon />
+                        </IconButton>
+                    </Tooltip>
 
-            <Box sx={{ flexGrow: 0, display: { xs: 'none', md: 'flex' }, gap: 1 }}>
-                {(userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
-                    <Button
-                        component={RouterLink}
-                        to="/dashboard"
-                        color="inherit"
-                        startIcon={<DashboardIcon />}
-                    >
-                        Dashboard
-                    </Button>
-                )}
-                {/* Aquí podrías añadir en el futuro el botón "Mis Tareas" */}
-            </Box>
+                    {/* Botón de Estadísticas (condicional y responsivo) */}
+                    {(userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
+                        <Button
+                            component={RouterLink}
+                            to="/dashboard"
+                            color="inherit"
+                            startIcon={<DashboardIcon />}
+                            sx={{
+                                // Oculta el texto en 'xs', lo muestra desde 'sm'
+                                '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } }, // Quita margen del icono si no hay texto
+                                minWidth: { xs: 'auto' }, // Permite que el botón se encoja a solo el icono
+                                px: { xs: 1, sm: 2 } // Ajusta padding para el modo icono
+                            }}
+                        >
+                            <Box component="span" sx={{ display: { xs: 'none', sm: 'block' } }}>
+                                ESTADISTICAS
+                            </Box>
+                        </Button>
+                    )}
+                    {/* Aquí podrías añadir el botón "Mis Tareas" en el futuro */}
+                </Box>
+                {/* --- FIN: NUEVO MENÚ DE NAVEGACIÓN --- */}
 
+
+                {/* --- Espaciador que empuja el menú de usuario a la derecha --- */}
+                <Box sx={{ flexGrow: 1 }} />
+
+
+                {/* --- Menú de Usuario a la Derecha --- */}
                 {isAuthenticated && currentUser ? (
-                    <Stack direction="row" spacing={1} alignItems="center"> {/* Reducido spacing a 1 para acomodar campana */}
-                        
-                        {/* --- CAMPANA DE NOTIFICACIONES AÑADIDA AQUÍ --- */}
+                    <Stack direction="row" spacing={1} alignItems="center">
                         <NotificationBell />
-                        {/* ---------------------------------------------- */}
-
+                        
                         <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontWeight: 500 }}>
                             {currentUser.name || currentUser.email}
                         </Typography>
 
                         <Tooltip title="Opciones de Usuario">
                             <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                                <Avatar
-                                    sx={{
-                                        width: 32,
-                                        height: 32,
-                                        fontSize: '0.875rem',
-                                        // Usar primary o un color que contraste bien con el AppBar
-                                        bgcolor: theme.palette.primary.dark, // O 'secondary.main' etc.
-                                        color: theme.palette.primary.contrastText 
-                                    }}
-                                >
+                                <Avatar sx={{ width: 32, height: 32, fontSize: '0.875rem', bgcolor: theme.palette.primary.dark, color: theme.palette.primary.contrastText }}>
                                     {getInitials(currentUser.name) || <PersonIcon />}
                                 </Avatar>
                             </IconButton>
@@ -118,18 +125,12 @@ function TopAppBar() {
                         <Menu
                             id="menu-appbar"
                             anchorEl={anchorElUser}
-                            anchorOrigin={{
-                                vertical: 'bottom',
-                                horizontal: 'right',
-                            }}
+                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                             keepMounted
-                            transformOrigin={{
-                                vertical: 'top',
-                                horizontal: 'right',
-                            }}
+                            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                             open={Boolean(anchorElUser)}
                             onClose={handleCloseUserMenu}
-                            MenuListProps={{ sx: { py: 0.5 } }} // Añade un poco de padding al MenuList
+                            MenuListProps={{ sx: { py: 0.5 } }}
                         >
                             {(userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
                                 <MenuItem onClick={goToAdminPanel} sx={{fontSize: '0.9rem', py:1}}>
@@ -137,8 +138,6 @@ function TopAppBar() {
                                     Panel Admin
                                 </MenuItem>
                             )}
-                            {/* Puedes añadir un Divider aquí si hay más items */}
-                            {/* { (userRole === 'ADMIN' || userRole === 'COORDINADOR') && <Divider sx={{my:0.5}} /> } */}
                             <MenuItem onClick={handleLogout} sx={{fontSize: '0.9rem', py:1}}>
                                 <LogoutIcon sx={{ mr: 1.5, fontSize: '1.2rem', color: 'action.active' }} />
                                 Cerrar Sesión
