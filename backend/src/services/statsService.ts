@@ -47,41 +47,58 @@ async function getMontoPorTipologia() {
 }
 
 /**
- * Calcula la cantidad de proyectos agrupados por línea de financiamiento.
+ * Calcula la suma de montos de proyectos, agrupados por programa,
+ * e incluye el nombre de la línea de financiamiento a la que pertenece cada programa.
  */
-async function getProyectosPorLineaFinanciamiento() {
-    const proyectosAgrupados = await prisma.project.groupBy({
-        by: ['lineaFinanciamientoId'],
-        _count: {
-            id: true, // Contamos proyectos por su ID
+async function getInversionPorPrograma() {
+    // 1. Agrupar proyectos por programaId y sumar sus montos.
+    const inversionAgrupada = await prisma.project.groupBy({
+        by: ['programaId'],
+        _sum: {
+            monto: true,
         },
         where: {
-            lineaFinanciamientoId: {
-                not: null, // Ignoramos proyectos sin línea de financiamiento asignada
+            programaId: {
+                not: null,
+            },
+            monto: {
+                not: null,
+            }
+        },
+    });
+
+    if (inversionAgrupada.length === 0) return [];
+
+    const programaIds = inversionAgrupada.map(item => item.programaId!);
+
+    // 2. Buscar los detalles de esos programas, incluyendo la línea de financiamiento relacionada.
+    const programas = await prisma.programa.findMany({
+        where: {
+            id: { in: programaIds },
+        },
+        include: {
+            lineaFinanciamiento: { // Incluimos la relación para obtener su nombre
+                select: {
+                    nombre: true,
+                },
             },
         },
     });
 
-    if (proyectosAgrupados.length === 0) return [];
+    // 3. Crear un mapa para buscar detalles por ID eficientemente.
+    const programaMap = new Map(programas.map(p => [p.id, p]));
 
-    const lineaIds = proyectosAgrupados.map(item => item.lineaFinanciamientoId!); // Usamos '!' porque filtramos los nulos
+    // 4. Formatear el resultado final para el frontend.
+    const resultadoFormateado = inversionAgrupada.map(item => {
+        const programaInfo = programaMap.get(item.programaId!);
+        const programaNombre = programaInfo?.nombre || 'Programa Desconocido';
+        const lineaNombre = programaInfo?.lineaFinanciamiento?.nombre || 'N/A';
 
-    const lineas = await prisma.lineaFinanciamiento.findMany({
-        where: {
-            id: { in: lineaIds },
-        },
-        select: {
-            id: true,
-            nombre: true,
-        },
-    });
-
-    const lineaMap = new Map(lineas.map(l => [l.id, l.nombre]));
-
-    const resultadoFormateado = proyectosAgrupados.map(item => ({
-        name: lineaMap.get(item.lineaFinanciamientoId!) || 'Sin Línea de Financiamiento',
-        value: item._count.id, // El valor es la cantidad de proyectos
-    })).sort((a, b) => b.value - a.value); // Ordenar de mayor a menor cantidad
+        return {
+            name: `${programaNombre} (${lineaNombre})`,
+            value: item._sum.monto?.toNumber() || 0,
+        }
+    }).sort((a, b) => b.value - a.value);
 
     return resultadoFormateado;
 }
@@ -172,35 +189,117 @@ async function getProyectosPorUnidad() {
 }
 
 /**
+ * Calcula la cantidad de proyectos agrupados por sector.
+ */
+async function getProyectosPorSector() {
+    const proyectosAgrupados = await prisma.project.groupBy({
+        by: ['sectorId'],
+        _count: {
+            id: true, // Contamos proyectos por su ID
+        },
+        where: {
+            sectorId: {
+                not: null, // Ignoramos proyectos sin sector asignado
+            },
+        },
+    });
+
+    if (proyectosAgrupados.length === 0) return [];
+
+    const sectorIds = proyectosAgrupados.map(item => item.sectorId!);
+
+    const sectores = await prisma.sector.findMany({
+        where: {
+            id: { in: sectorIds },
+        },
+        select: {
+            id: true,
+            nombre: true,
+        },
+    });
+
+    const sectorMap = new Map(sectores.map(s => [s.id, s.nombre]));
+
+    const resultadoFormateado = proyectosAgrupados.map(item => ({
+        name: sectorMap.get(item.sectorId!) || 'Sin Sector Asignado',
+        value: item._count.id, // El valor es la cantidad de proyectos
+    })).sort((a, b) => b.value - a.value);
+
+    return resultadoFormateado;
+}
+
+/**
+ * Calcula la suma de superficies (terreno y edificación) por tipología de proyecto.
+ */
+async function getSuperficiePorTipologia() {
+    const superficieAgrupada = await prisma.project.groupBy({
+        by: ['tipologiaId'],
+        _sum: {
+            superficieTerreno: true,
+            superficieEdificacion: true,
+        },
+        where: {
+            // Consideramos solo proyectos que tengan al menos una de las dos superficies
+            OR: [
+                { superficieTerreno: { gt: 0 } },
+                { superficieEdificacion: { gt: 0 } },
+            ]
+        }
+    });
+
+    if (superficieAgrupada.length === 0) return [];
+
+    const tipologiaIds = superficieAgrupada.map(item => item.tipologiaId);
+
+    const tipologias = await prisma.tipologiaProyecto.findMany({
+        where: { id: { in: tipologiaIds } },
+        select: { id: true, nombre: true },
+    });
+
+    const tipologiaMap = new Map(tipologias.map(t => [t.id, t.nombre]));
+
+    const resultadoFormateado = superficieAgrupada.map(item => ({
+        name: tipologiaMap.get(item.tipologiaId) || 'Sin Tipología',
+        terreno: item._sum.superficieTerreno || 0,
+        edificacion: item._sum.superficieEdificacion || 0,
+    }));
+
+    return resultadoFormateado;
+}
+
+/**
  * Función principal que recopila todas las estadísticas para el dashboard.
  * En el futuro, llamará a otras funciones de estadísticas aquí.
  */
 export async function getDashboardData() {
-    // Llamar a todas las funciones de agregación de datos en paralelo
     const [
         montoPorTipologia,
-        proyectosPorLineaFinanciamiento,
+        inversionPorPrograma,
         tareasActivasPorUsuario,
-        proyectosPorUnidad, // Añadida la nueva llamada
+        proyectosPorUnidad,
+        proyectosPorSector,
+        superficiePorTipologia,
     ] = await Promise.all([
         getMontoPorTipologia(),
-        getProyectosPorLineaFinanciamiento(),
+        getInversionPorPrograma(),
         getTareasActivasPorUsuario(),
-        getProyectosPorUnidad(), // Llamamos a la nueva función
+        getProyectosPorUnidad(),
+        getProyectosPorSector(),
+        getSuperficiePorTipologia(),
     ]);
 
-    // Devolver un objeto estructurado para el dashboard
     return {
         financiero: {
             montoPorTipologia,
-            proyectosPorLineaFinanciamiento,
+            inversionPorPrograma,
         },
         personas: {
             tareasActivasPorUsuario,
-            proyectosPorUnidad, // Añadido el nuevo dato
+            proyectosPorUnidad,
         },
         geografico: {
-            // aquí irán los datos geográficos
+            proyectosPorSector,
+            superficiePorTipologia,
         },
     };
 }

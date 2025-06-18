@@ -3,23 +3,31 @@ import { apiService } from '../services/apiService';
 // Define la estructura de la data que esperas para un gráfico
 // (Coincide con lo que devuelve tu backend para montoPorTipologia)
 export interface ChartDataPoint {
-    name: string;
-    value: number;
+name: string;
+value: number;
+}
+  
+export interface SuperficiePorTipologia {
+name: string;
+terreno: number;
+edificacion: number;
 }
 
 // Define la estructura completa de la respuesta del dashboard
 export interface DashboardData {
     financiero: {
-        montoPorTipologia: ChartDataPoint[];
-        // aquí irán otros datos financieros en el futuro
+      montoPorTipologia: ChartDataPoint[];
+      inversionPorPrograma: ChartDataPoint[];
     };
     personas: {
-        // aquí irán los datos de personas en el futuro
+      tareasActivasPorUsuario: ChartDataPoint[];
+      proyectosPorUnidad: ChartDataPoint[];
     };
     geografico: {
-        // aquí irán los datos geográficos en el futuro
+      proyectosPorSector: ChartDataPoint[];
+      superficiePorTipologia: SuperficiePorTipologia[]; // Usa la nueva interfaz aquí
     };
-}
+  }
 
 /**
  * Llama al endpoint del backend para obtener los datos del dashboard.
