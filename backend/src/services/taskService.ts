@@ -249,6 +249,66 @@ export const getTaskById = async (
     return task;
 };
 
+export const getMyTasks = async (
+    requestingUserPayload: UserPayload,
+    filters: MyTasksQuery
+): Promise<TaskWithChatStatusAndDetails[]> => {
+    const { id: userId, role } = requestingUserPayload;
+    const { projectId, searchTerm } = filters;
+
+    const whereClause: Prisma.TareaWhereInput = {};
+
+    // 1. Condición base según el rol
+    if (role === Role.ADMIN || role === Role.COORDINADOR) {
+        whereClause.OR = [
+            { asignadoId: userId },
+            { creadorId: userId }
+        ];
+    } else { // Rol USUARIO
+        whereClause.asignadoId = userId;
+    }
+
+    // 2. Añadir filtros adicionales dinámicamente
+    const andConditions: Prisma.TareaWhereInput[] = [];
+    if (projectId) {
+        // Prisma espera un número para el ID, pero los query params pueden llegar como string.
+        // Convertimos a número para asegurar que la consulta sea válida.
+        const numericProjectId = Number(projectId);
+        if (!isNaN(numericProjectId)) {
+            andConditions.push({ proyectoId: numericProjectId });
+        }
+    }
+    if (searchTerm) {
+        andConditions.push({
+            titulo: {
+                contains: searchTerm,
+                mode: 'insensitive'
+            }
+        });
+    }
+    
+    // Si hay condiciones de filtro, las añadimos con un AND
+    if (andConditions.length > 0) {
+        whereClause.AND = andConditions;
+    }
+
+    const tasksFromDb = await prisma.tarea.findMany({
+        where: whereClause,
+        include: {
+            creador: { select: { id: true, name: true, email: true } },
+            asignado: { select: { id: true, name: true, email: true } },
+            proyecto: { select: { id: true, nombre: true, codigoUnico: true } },
+        },
+        orderBy: {
+            // Ordenar por tareas sin fecha de plazo al final, luego por fecha más próxima
+            fechaPlazo: { sort: 'asc', nulls: 'last' },
+        },
+    });
+
+    // Tipado explícito para asegurar que el resultado coincida
+    return tasksFromDb as TaskWithChatStatusAndDetails[];
+};
+
 export const updateTask = async (
     projectId: number,
     taskId: number,
@@ -443,6 +503,7 @@ export const markTaskChatAsViewed = async (taskId: number, userId: number): Prom
 };
 
 export const taskService = {
+    getMyTasks,
     createTask,
     getTasksByProjectId,
     getTaskById,

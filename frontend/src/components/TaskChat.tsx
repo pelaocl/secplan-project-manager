@@ -311,7 +311,6 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
             disabled={isSending}
             variant="outlined"
             size="small" // Para un look más compacto
-            rows={1} // Iniciar con 1 fila
             onKeyPress={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();

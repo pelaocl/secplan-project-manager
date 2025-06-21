@@ -29,3 +29,10 @@ export const taskIdSchema = z.object({
 export const projectIdSchema = z.object({ // Ya podrías tener esto en projectSchemas.ts
     projectId: z.string().regex(/^\d+$/, "ID de proyecto debe ser un número").transform(val => parseInt(val, 10)),
 });
+
+// Schema para los query params de "Mis Tareas"
+export const myTasksQuerySchema = z.object({
+    projectId: z.coerce.number().int().positive().optional(),
+    searchTerm: z.string().optional(),
+    });
+export type MyTasksQuery = z.infer<typeof myTasksQuerySchema>;

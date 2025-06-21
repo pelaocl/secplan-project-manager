@@ -15,6 +15,7 @@ import ProjectCreatePageWithMinimalChild  from '../pages/ProjectCreatePage'; // 
 
 import ProjectEditPage from '../pages/ProjectEditPage';
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
+const MyTasksPage = lazy(() => import('../pages/MyTasksPage'));
 const AdminUsersPage = lazy(() => import('../pages/AdminUsersPage'));
 const AdminTagsPage = lazy(() => import('../pages/AdminTagsPage'));
 const AdminLookupsPage = lazy(() => import('../pages/AdminLookupsPage'));
@@ -79,6 +80,18 @@ function AppRoutes() {
                             </ErrorBoundary>
                         </ProtectedRoute>
                     }
+                />
+
+                {/* Ruta para "Mis Tareas" (Protegida para TODOS los usuarios logueados) */}
+                <Route 
+                    path="/mis-tareas" 
+                    element={
+                        <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.COORDINADOR, ROLES.USUARIO]}>
+                            <ErrorBoundary fallbackMessage="Error al cargar la página de Tareas.">
+                                <MyTasksPage />
+                            </ErrorBoundary>
+                        </ProtectedRoute>
+                    } 
                 />
 
                 {/* Rutas Dashboard (Protegida para Admin/Coordinador) */}
