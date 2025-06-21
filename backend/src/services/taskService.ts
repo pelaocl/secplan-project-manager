@@ -221,7 +221,7 @@ export const getTaskById = async (
     projectId: number,
     taskId: number,
     requestingUserPayload: UserPayload
-): Promise<Tarea | null> => { // Devuelve Task que incluye relaciones según el include
+): Promise<Tarea | null> => {
     await checkProjectAccess(projectId, requestingUserPayload);
 
     const task = await prisma.tarea.findUnique({
@@ -230,11 +230,25 @@ export const getTaskById = async (
             creador: { select: { id: true, name: true, email: true, role: true } },
             asignado: { select: { id: true, name: true, email: true, role: true } },
             proyecto: { select: { id: true, nombre: true, codigoUnico: true } },
-            participantes: { select: { id: true, name: true, email: true, role: true } }, // Incluir participantes
+            participantes: { select: { id: true, name: true, email: true, role: true } },
+            // --- INICIO DE MODIFICACIÓN ---
             mensajes: { 
                 orderBy: { fechaEnvio: 'asc' },
-                include: { remitente: { select: { id: true, name: true, email: true, role: true } } }
+                include: { 
+                    remitente: { select: { id: true, name: true, email: true, role: true } },
+                    // Añadimos la inclusión del mensaje padre aquí
+                    mensajePadre: {
+                        select: {
+                            id: true,
+                            contenido: true,
+                            remitente: {
+                                select: { id: true, name: true }
+                            }
+                        }
+                    }
+                }
             },
+            // --- FIN DE MODIFICACIÓN ---
             chatStatuses: { 
                 where: { userId: requestingUserPayload.id },
                 select: { lastReadTimestamp: true }
@@ -244,8 +258,7 @@ export const getTaskById = async (
 
     if (!task) throw new NotFoundError(`Tarea con ID ${taskId} no encontrada.`);
     if (task.proyectoId !== projectId) throw new ForbiddenError(`La tarea ${taskId} no pertenece al proyecto ${projectId}.`);
-    console.log("[taskService.getTaskById] Task data from DB:", JSON.stringify(task, null, 2)); // <--- AÑADE ESTE LOG
-
+    
     return task;
 };
 

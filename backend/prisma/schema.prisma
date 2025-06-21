@@ -39,9 +39,10 @@ enum TipoNotificacion {
   NUEVA_TAREA_ASIGNADA
   NUEVO_MENSAJE_TAREA
   TAREA_ACTUALIZADA_ESTADO
-  TAREA_ACTUALIZADA_INFO // Para otros cambios en la tarea
+  TAREA_ACTUALIZADA_INFO
   TAREA_COMPLETADA
   TAREA_VENCIMIENTO_PROXIMO // (Este requeriría un job en el backend para generarse)
+  MENCION_EN_TAREA
   // Puedes añadir más tipos según necesites
 }
 
@@ -255,6 +256,10 @@ model MensajeChatTarea {
 
   remitenteId Int
   remitente   User @relation("MensajesEnviadosPorUsuario", fields: [remitenteId], references: [id])
+
+  mensajePadreId Int?
+  mensajePadre   MensajeChatTarea? @relation("Respuestas", fields: [mensajePadreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  respuestas     MensajeChatTarea[] @relation("Respuestas")
 
   // Para "leído por" (avanzado, considera para una v2):
   // leidoPor     User[]   @relation("MensajesLeidosPorUsuarios")

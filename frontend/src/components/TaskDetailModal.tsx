@@ -30,41 +30,62 @@ interface TaskDetailModalProps {
 
 const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, open, onClose }) => {
   
-    const theme = useTheme();
-  // Usamos un breakpoint de MUI (md: 900px). Puedes ajustarlo.
-  const isLargeScreen = useMediaQuery(theme.breakpoints.up('md')); 
-  
-  const sidebarFixedWidth = { xs: '100%', sm: '320px', md: '360px' }; // Ancho de la sidebar en modo normal
-  const chatAreaFlexGrow = 1;
-  const collapsedPaneWidth = '56px'; // Ancho de un panel cuando está colapsado
-  const transitionStyle = 'width 0.2s ease-in-out, padding 0.2s ease-in-out';
+const theme = useTheme();
+// Usamos un breakpoint de MUI (md: 900px). Puedes ajustarlo.
+const isLargeScreen = useMediaQuery(theme.breakpoints.up('md')); 
 
-  // Estado para controlar qué panel está activo en pantallas pequeñas
-  // 'chat' (chat expandido, descripción colapsada) o 'description' (descripción expandida, chat colapsado)
-  const [activePaneSmallScreen, setActivePaneSmallScreen] = useState<'chat' | 'description'>('chat');
+const sidebarFixedWidth = { xs: '100%', sm: '320px', md: '360px' }; // Ancho de la sidebar en modo normal
+const chatAreaFlexGrow = 1;
+const collapsedPaneWidth = '56px'; // Ancho de un panel cuando está colapsado
+const transitionStyle = 'width 0.2s ease-in-out, padding 0.2s ease-in-out';
 
-  useEffect(() => {
-    // Si la pantalla se vuelve grande, siempre mostrar ambas columnas
-    if (isLargeScreen) {
-        // No necesitamos un estado 'activePane' para pantallas grandes, se muestran ambas
-    } else {
-        // En pantallas pequeñas, por defecto mostrar el chat
-        setActivePaneSmallScreen('chat');
+// Estado para controlar qué panel está activo en pantallas pequeñas
+// 'chat' (chat expandido, descripción colapsada) o 'description' (descripción expandida, chat colapsado)
+const [activePaneSmallScreen, setActivePaneSmallScreen] = useState<'chat' | 'description'>('chat');
+
+useEffect(() => {
+// Si la pantalla se vuelve grande, siempre mostrar ambas columnas
+if (isLargeScreen) {
+    // No necesitamos un estado 'activePane' para pantallas grandes, se muestran ambas
+} else {
+    // En pantallas pequeñas, por defecto mostrar el chat
+    setActivePaneSmallScreen('chat');
+}
+}, [isLargeScreen]);
+
+
+if (!task) {
+return null; 
+}
+console.log("[TaskDetailModal] Task data received:", JSON.stringify(task, null, 2)); // <--- AÑADE ESTE LOG
+
+const initialLastRead = task.chatStatuses?.[0]?.lastReadTimestamp || null;
+
+const formatDate = (dateString?: string | Date | null, includeTime = false): string => { /* ... tu función formatDate ... */ if (!dateString) return 'N/A'; try { const date = (dateString instanceof Date) ? dateString : new Date(dateString); if (isNaN(date.getTime())) return 'Fecha inválida'; const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit' }; if (includeTime) { options.hour = '2-digit'; options.minute = '2-digit'; } return date.toLocaleDateString('es-CL', options); } catch (e) { return 'Fecha inválida'; } };
+const participantesAdicionales = task.participantes?.filter(p => p.id !== task.asignadoId && p.id !== task.creadorId) || [];
+
+const sidebarWidth = '320px'; // Ancho de la sidebar en pantallas grandes
+
+// --- Construir lista de participantes para menciones ---
+const chatParticipants = React.useMemo(() => {
+    const participantMap = new Map<number, User>();
+
+    // Añadir al creador
+    if (task.creador) {
+    participantMap.set(task.creador.id, task.creador);
     }
-  }, [isLargeScreen]);
-
-
-  if (!task) {
-    return null; 
-  }
-  console.log("[TaskDetailModal] Task data received:", JSON.stringify(task, null, 2)); // <--- AÑADE ESTE LOG
-
-  const initialLastRead = task.chatStatuses?.[0]?.lastReadTimestamp || null;
-
-  const formatDate = (dateString?: string | Date | null, includeTime = false): string => { /* ... tu función formatDate ... */ if (!dateString) return 'N/A'; try { const date = (dateString instanceof Date) ? dateString : new Date(dateString); if (isNaN(date.getTime())) return 'Fecha inválida'; const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit' }; if (includeTime) { options.hour = '2-digit'; options.minute = '2-digit'; } return date.toLocaleDateString('es-CL', options); } catch (e) { return 'Fecha inválida'; } };
-  const participantesAdicionales = task.participantes?.filter(p => p.id !== task.asignadoId && p.id !== task.creadorId) || [];
-
-  const sidebarWidth = '320px'; // Ancho de la sidebar en pantallas grandes
+    // Añadir al asignado
+    if (task.asignado) {
+    participantMap.set(task.asignado.id, task.asignado);
+    }
+    // Añadir a otros participantes
+    if (task.participantes) {
+    task.participantes.forEach(p => participantMap.set(p.id, p));
+    }
+    
+    return Array.from(participantMap.values());
+}, [task.creador, task.asignado, task.participantes]);
+// --- Lista de Participantes ---
 
   return (
     <Dialog 
@@ -194,6 +215,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, open, onClose }
                         taskId={task.id} 
                         initialMessages={task.mensajes || []}
                         initialLastReadTimestamp={initialLastRead}
+                        participants={chatParticipants}
                     />
                 </>
             ) : ( // VISTA COLAPSADA DEL CHAT (cuando la descripción está activa en pantalla pequeña)

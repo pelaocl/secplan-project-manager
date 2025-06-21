@@ -1,8 +1,10 @@
+//frontend/src/services/chatMessageApi.ts
 import { apiService } from './apiService';
 import { ChatMessage, PaginatedChatMessages } from '../types';
 
 interface CreateChatMessagePayload {
     contenido: string; // HTML sanitizado
+    mensajePadreId?: number; // ID del mensaje al que se responde
 }
 
 const TASK_API_BASE = '/tasks'; // La ruta base correcta para las tareas

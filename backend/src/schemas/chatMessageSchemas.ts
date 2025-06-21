@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const createChatMessageSchema = z.object({
     contenido: z.string().min(1, "El contenido del mensaje no puede estar vacío.")
                       .max(2000, "El contenido del mensaje es demasiado largo."), // Límite de caracteres para el HTML
+    mensajePadreId: z.number().int().positive().optional(),
     // tareaId vendrá del parámetro de la URL
     // remitenteId vendrá del usuario autenticado
 });

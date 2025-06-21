@@ -105,23 +105,20 @@ export const markTaskChatNotificationsAsRead = async (
 ): Promise<{ count: number }> => {
     console.log(`[NotificationService - STEP 3] markTaskChatNotificationsAsRead llamado para userId: ${userId}, taskId: ${taskId}`);
     
-    // Construimos la parte de la URL que identifica la tarea
     const targetUrlPart = `/tasks/${taskId}`; 
 
     const result = await prisma.notificacion.updateMany({
         where: {
             usuarioId: userId,
-            tipo: TipoNotificacion.NUEVO_MENSAJE_TAREA,
-            // Ya no filtramos por recursoId y recursoTipo aquí directamente,
-            // sino que nos basamos en que la urlDestino apunte a esta tarea.
-            // Esto es un poco menos preciso si varias notificaciones tuvieran URLs muy similares,
-            // pero dado que urlDestino incluye /tasks/:taskId, debería ser bastante específico.
-            // Alternativamente, si quisieras ser muy preciso, tendrías que:
-            // 1. Obtener todos los IDs de MensajeChatTarea para la taskId.
-            // 2. Usar esos IDs en un `recursoId: { in: [messageIds...] }`.
-            // Por ahora, el filtro por urlDestino es más simple de implementar.
+            // Ahora buscamos ambos tipos de notificaciones relacionadas al chat
+            tipo: {
+                in: [
+                    TipoNotificacion.NUEVO_MENSAJE_TAREA,
+                    TipoNotificacion.MENCION_EN_TAREA
+                ]
+            },
             urlDestino: {
-                contains: targetUrlPart, // Busca notificaciones cuya URL contenga /tasks/ID_DE_LA_TAREA
+                contains: targetUrlPart,
             },
             leida: false,
         },

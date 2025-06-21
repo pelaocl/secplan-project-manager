@@ -1,28 +1,51 @@
-// frontend/src/components/TaskChat.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Button, CircularProgress, Paper, Typography, Alert, useTheme, Fab, Divider, Chip as MuiChip, Tooltip, IconButton, TextField } from '@mui/material'; // TextField añadido
+import { Box, Button, CircularProgress, Paper, Typography, Alert, useTheme, Fab, Divider, Chip as MuiChip, Tooltip, IconButton } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ImageIcon from '@mui/icons-material/Image';
+import CloseIcon from '@mui/icons-material/Close';
 import DOMPurify from 'dompurify';
 
-import { ChatMessage, UserPayload } from '../types';
+import { ChatMessage, User } from '../types';
 import { useCurrentUser } from '../store/authStore';
 import ChatMessageItem from './ChatMessageItem';
 import { chatMessageService } from '../services/chatMessageApi';
 import { socketService } from '../services/socketService';
 import { notificationApi } from '../services/notificationApi';
 import { taskApi } from '../services/taskApi';
-// Ya no importamos TiptapEditor para el input del chat
 
+// Dependencias para la nueva funcionalidad de Menciones
+import { MentionsInput, Mention } from 'react-mentions';
+import './mentionStyles.css'; // Asegúrate de crear este archivo
+
+// --- Props actualizadas para recibir a los participantes ---
 interface TaskChatProps {
   projectId: number;
   taskId: number;
   initialMessages: ChatMessage[];
+  participants: User[]; // Lista de usuarios que pueden ser mencionados
   initialLastReadTimestamp?: string | Date | null;
 }
 
-const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages, initialLastReadTimestamp }) => {
+// --- Nuevo componente para la previsualización de la respuesta ---
+const ReplyPreview: React.FC<{ message: ChatMessage; onCancel: () => void }> = ({ message, onCancel }) => {
+    const theme = useTheme();
+    return (
+        <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.palette.action.hover }}>
+            <Box>
+                <Typography variant="caption" color="text.secondary">Respondiendo a:</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {message.remitente.name || message.remitente.email}
+                </Typography>
+            </Box>
+            <IconButton onClick={onCancel} size="small">
+                <CloseIcon fontSize="small" />
+            </IconButton>
+        </Box>
+    );
+};
+
+const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages, participants, initialLastReadTimestamp }) => {
   const theme = useTheme();
   const currentUser = useCurrentUser();
   
@@ -34,19 +57,23 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
     setShowNewMessagesButton(false);
   }, [initialMessages]);
 
-  const [newMessageText, setNewMessageText] = useState<string>(''); // Para el TextField
-  const [imageToSend, setImageToSend] = useState<string | null>(null); // Para la URL de la imagen
+  // --- Estados actualizados y nuevos ---
+  const [newMessageText, setNewMessageText] = useState<string>('');
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const mentionData = participants.map(p => ({ id: p.id, display: p.name || p.email }));
+  // ---
+
+  const [imageToSend, setImageToSend] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLTextAreaElement>(null); // Ref para el textarea
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   
   const [showNewMessagesButton, setShowNewMessagesButton] = useState<boolean>(false);
   const [firstUnreadMessageIdForDivider, setFirstUnreadMessageIdForDivider] = useState<number | null>(null);
   const [hasScrolledInitially, setHasScrolledInitially] = useState<boolean>(false);
-
   const [shouldFocusInput, setShouldFocusInput] = useState<boolean>(false);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
@@ -68,7 +95,6 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
                     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= 60;
                     if (!isNearBottom) {
                         setShowNewMessagesButton(true);
-                        // firstUnreadMessageIdForDivider se establece en el scroll inicial, no aquí por cada mensaje nuevo
                     } else {
                         setTimeout(() => scrollToBottom('smooth'), 50);
                     }
@@ -81,7 +107,7 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
             return updatedMessages;
         });
     }
-  }, [taskId, currentUser?.id, scrollToBottom]); // Eliminados setters de estado para estabilizar
+  }, [taskId, currentUser?.id, scrollToBottom]);
 
   useEffect(() => {
     if (!taskId || !currentUser || !projectId) return;
@@ -109,7 +135,6 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
     if (!container || initialMessages.length === 0 || hasScrolledInitially) {
         if (initialMessages.length === 0) { setShowNewMessagesButton(false); setFirstUnreadMessageIdForDivider(null); }
         if (hasScrolledInitially && initialMessages.length > 0 && !firstUnreadMessageIdForDivider) {
-             // Si ya se hizo scroll inicial y no se marcó ningún "no leído", asegurar scroll al fondo
              scrollToBottom('auto');
         }
         return; 
@@ -144,7 +169,7 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
             } else if (firstUnreadIdxFromOther === 0) {
                 if(container) container.scrollTop = 0;
             } else { 
-                 scrollToBottom('auto');
+                scrollToBottom('auto');
             }
         }, 50);
     } else {
@@ -176,88 +201,83 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
     };
     container.addEventListener('scroll', handleScroll);
     return () => { clearTimeout(scrollTimeout); container.removeEventListener('scroll', handleScroll); };
-  }, [showNewMessagesButton, firstUnreadMessageIdForDivider, messages.length]); // messages.length para re-evaluar si cambia el scrollHeight
-
-  useEffect(() => {
-    }, [newMessageText]);
-  // --- FIN AJUSTAR ALTURA ---
+  }, [showNewMessagesButton, firstUnreadMessageIdForDivider, messages.length]);
 
   useEffect(() => {
     if (shouldFocusInput) {
         chatInputRef.current?.focus();
-        setShouldFocusInput(false); // Resetea el flag después de enfocar
+        setShouldFocusInput(false);
     }
-}, [shouldFocusInput]); // Este efecto se ejecuta cuando shouldFocusInput cambia a true
+  }, [shouldFocusInput]);
 
   const handleInsertImageLink = () => {
     const url = prompt("Ingresa la URL de la imagen que deseas adjuntar:");
     if (url) {
-        setImageToSend(url); // Guardar la URL de la imagen
-        // Opcional: mostrar un preview o indicador de que una imagen está adjunta
+        setImageToSend(url);
         alert("Imagen lista para ser enviada con tu mensaje. Escribe un texto si quieres y presiona Enviar.");
-        chatInputRef.current?.focus();
+        setShouldFocusInput(true);
     }
   };
 
+  // --- Nuevos Handlers para la funcionalidad de Respuestas ---
+  const handleReplyClick = (message: ChatMessage) => {
+    setReplyingTo(message);
+    setShouldFocusInput(true);
+  };
+
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+    setShouldFocusInput(true);
+  };
+  
+  // --- Función de envío de mensaje MODIFICADA ---
   const handleSendMessage = async () => {
     const textContent = newMessageText.trim();
     if ((!textContent && !imageToSend) || !currentUser) {
         setError(!textContent && !imageToSend ? "El mensaje no puede estar vacío." : "Usuario no autenticado.");
-        // Re-enfocar si el intento de envío falla por validación temprana
-        setTimeout(() => {
-            chatInputRef.current?.focus();
-        }, 0);
+        setTimeout(() => { chatInputRef.current?.focus(); }, 0);
         return;
     }
 
     let htmlContent = "";
     if (textContent) {
-        const escapedText = textContent.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br />");
-        htmlContent += `<p>${escapedText}</p>`;
+        // El texto ya viene con el markup de menciones: @[Nombre](user:ID)
+        // Lo envolvemos en un párrafo para consistencia, escapando saltos de línea
+        htmlContent += `<p>${textContent.replace(/\n/g, "<br />")}</p>`;
     }
     if (imageToSend) {
         htmlContent += `<p><img src="${imageToSend}" alt="Imagen adjunta" style="max-width: 200px; height: auto; border-radius: 4px; margin-top: 4px;" /></p>`;
     }
 
     const cleanHtml = DOMPurify.sanitize(htmlContent, { 
-        ALLOWED_TAGS: ['p', 'br', 'img'],
-        ALLOWED_ATTR: ['src', 'alt', 'style']
+        ALLOWED_TAGS: ['p', 'br', 'img', 'strong', 'em', 'u', 's', 'a', 'span'],
+        ALLOWED_ATTR: ['src', 'alt', 'style', 'class', 'href', 'target']
     });
-
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = cleanHtml;
-    if (!(tempDiv.textContent || tempDiv.innerText || "").trim() && !cleanHtml.includes("<img")) {
-        setError("El mensaje está vacío o solo contiene espacios.");
-        setNewMessageText(''); 
-        setImageToSend(null);
-        // Re-enfocar si el mensaje estaba vacío después de sanear
-        setTimeout(() => {
-            chatInputRef.current?.focus();
-        }, 0);
-        return;
-    }
 
     setIsSending(true); 
     setError(null);
     try {
-      await chatMessageService.createChatMessage(projectId, taskId, { contenido: cleanHtml });
+      await chatMessageService.createChatMessage(projectId, taskId, { 
+          contenido: cleanHtml,
+          mensajePadreId: replyingTo ? replyingTo.id : undefined,
+      });
       setNewMessageText(''); 
       setImageToSend(null);
+      setReplyingTo(null); // Limpiar respuesta después de enviar
       setShouldFocusInput(true);
-        // La llamada a focus() se moverá al bloque finally para asegurar que el input esté habilitado
     } catch (err) { 
         console.error("Error enviando mensaje:", err); 
         setError(err instanceof Error ? err.message : "No se pudo enviar el mensaje.");
     } finally { 
         setIsSending(false);
     }
-};
+  };
   
   if (!currentUser) { return <Typography>Debes estar autenticado para participar en el chat.</Typography>; }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '500px', position: 'relative' }}>
-      <Paper ref={messagesContainerRef} variant="outlined" sx={{ flexGrow: 1, p: 2, overflowY: 'auto', mb: 2, backgroundColor: 'background.default', position: 'relative' }}>
+      <Paper ref={messagesContainerRef} variant="outlined" sx={{ flexGrow: 1, p: 2, overflowY: 'auto', mb: 1, backgroundColor: 'background.default', position: 'relative' }}>
         {messages.length === 0 && ( <Typography color="text.secondary" textAlign="center" sx={{ mt: 2 }}>No hay mensajes en esta tarea aún. ¡Sé el primero!</Typography> )}
         {messages.map((msg) => (
             <React.Fragment key={msg.id}>
@@ -267,7 +287,7 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
                     </Divider>
                 )}
                 <Box id={`message-item-${msg.id}`}>
-                    <ChatMessageItem message={msg} />
+                    <ChatMessageItem message={msg} onReply={handleReplyClick} />
                 </Box>
             </React.Fragment>
         ))}
@@ -283,71 +303,45 @@ const TaskChat: React.FC<TaskChatProps> = ({ projectId, taskId, initialMessages,
         </Fab>
       )}
 
-{/* --- ÁREA DE INPUT MODIFICADA --- */}
-<Box sx={{ 
-          display: 'flex', 
-          alignItems: 'flex-end', // Importante para alinear botones con el textarea cuando crece
-          gap: 1, 
-          borderTop: 1, 
-          borderColor: 'divider', 
-          pt: 1, // Reducido padding top
-          pb: 0.5  // Reducido padding bottom para que esté más pegado al final
-        }}
-      >
-        <Tooltip title="Adjuntar imagen desde URL">
-            <IconButton onClick={handleInsertImageLink} disabled={isSending} sx={{p: theme.spacing(1.25) /* Consistencia en padding */}}>
-                <ImageIcon fontSize="small"/>
-            </IconButton>
-        </Tooltip>
-        <TextField
-            inputRef={chatInputRef} // Usar inputRef para el textarea interno
-            fullWidth
-            multiline
-            minRows={1}
-            maxRows={3}
-            value={newMessageText}
-            onChange={(e) => setNewMessageText(e.target.value)}
-            placeholder="Escribe un mensaje..."
-            disabled={isSending}
-            variant="outlined"
-            size="small" // Para un look más compacto
-            onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                }
-            }}
-            // No necesitamos InputProps.rows aquí si usamos el useEffect con adjustTextareaHeight
-            // La lógica de maxHeight y overflowY se maneja en adjustTextareaHeight
-            sx={{
-                flexGrow: 1,
-                mr: 0.5, 
-                '& .MuiInputBase-root': { 
-                    borderRadius: '20px',
-                    backgroundColor: theme.palette.mode === 'light' ? theme.palette.grey[50] : theme.palette.grey[800],
-                    pt: '5px', // Ajusta el padding superior DENTRO del MuiInputBase-root
-                    pb: '5px', // Ajusta el padding inferior DENTRO del MuiInputBase-root
-                    alignItems: 'center', // Para centrar el texto si es una sola línea
-                },
-                '& .MuiOutlinedInput-input': { // Estilos para el <textarea> interno
-                    // py: '10px', // Eliminamos o reducimos el padding vertical aquí, minRows/maxRows lo manejan mejor
-                    paddingTop: '3.5px', // Padding más fino para el texto dentro del input
-                    paddingBottom: '3.5px',// Padding más fino para el texto dentro del input
-                    lineHeight: '1.43', // Ajuste de altura de línea estándar
-                    fontSize: '0.875rem',
-                    // maxHeight y overflowY ahora son manejados por maxRows
-                }
-            }}
-        />
-        <Tooltip title="Enviar mensaje">
-            <span>
-                <IconButton color="primary" onClick={handleSendMessage} disabled={isSending || (!newMessageText.trim() && !imageToSend)} sx={{p: theme.spacing(1.25)}}>
-                    {isSending ? <CircularProgress size={20} color="inherit" /> : <SendIcon fontSize="small" />}
+      <Paper elevation={3} sx={{ mt: 'auto', flexShrink: 0 }}>
+        {replyingTo && <ReplyPreview message={replyingTo} onCancel={handleCancelReply} />}
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', p: 1, gap: 1 }}>
+            <Tooltip title="Adjuntar imagen desde URL">
+              <span>
+                <IconButton onClick={handleInsertImageLink} disabled={isSending}>
+                    <ImageIcon />
                 </IconButton>
-            </span>
-        </Tooltip>
-      </Box>
-      {/* --- FIN ÁREA DE INPUT MODIFICADA --- */}
+              </span>
+            </Tooltip>
+            
+            <MentionsInput
+                value={newMessageText}
+                onChange={(e) => setNewMessageText(e.target.value)}
+                placeholder="Escribe un mensaje... Usa @ para mencionar."
+                a11ySuggestionsListLabel={"Usuarios sugeridos para mencionar"}
+                disabled={isSending}
+                className="mentions-input" // Clase para aplicar estilos desde .css
+                inputRef={chatInputRef}
+                allowSpaceInQuery
+            >
+                <Mention
+                    trigger="@"
+                    data={mentionData}
+                    markup="@[__display__](user:__id__)"
+                    className="mentions-mention"
+                />
+            </MentionsInput>
+
+            <Tooltip title="Enviar mensaje">
+              <span>
+                <IconButton color="primary" onClick={handleSendMessage} disabled={isSending || (!newMessageText.trim() && !imageToSend)}>
+                    {isSending ? <CircularProgress size={24} /> : <SendIcon />}
+                </IconButton>
+              </span>
+            </Tooltip>
+        </Box>
+      </Paper>
       {error && <Alert severity="error" sx={{mt:1}}>{error}</Alert>}
     </Box>
   );

@@ -95,6 +95,17 @@ export enum PrioridadTarea {
   BAJA = 'BAJA',
 }
 
+// Sub-tipo para el mensaje citado en una respuesta.
+// Esto mantiene la interfaz ChatMessage más limpia.
+export interface ParentChatMessage {
+  id: number;
+  contenido: string;
+  remitente: {
+    id: number;
+    name?: string | null;
+  };
+}
+
 // --- Interfaz para Mensajes de Chat ---
 export interface ChatMessage {
   id: number;
@@ -108,6 +119,9 @@ export interface ChatMessage {
     email: string;
     role: UserRole; // Asumiendo que UserRole ya está definido
   };
+  // Campos para la funcionalidad de respuestas
+  mensajePadreId?: number | null;
+  mensajePadre?: ParentChatMessage | null; // Contiene el objeto del mensaje respondido
 }
 
 // --- ENUMS PARA NOTIFICACIONES (deben coincidir con los valores de Prisma) ---
