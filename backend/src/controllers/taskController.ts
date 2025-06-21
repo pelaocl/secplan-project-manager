@@ -136,3 +136,23 @@ export const markTaskChatAsViewedHandler = async (req: AuthenticatedRequest, res
         next(error);
     }
 };
+
+export const getMyTasksHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const userPayload = req.user as UserPayload;
+        // Obtiene los filtros validados de la query
+        const filters = req.query as MyTasksQuery;
+
+        if (!userPayload) {
+            res.status(403).json({ message: "Acceso denegado: Usuario no autenticado." });
+            return;
+        }
+
+        // Pasa el payload del usuario Y los filtros al servicio
+        const tasks = await taskService.getMyTasks(userPayload, filters);
+        
+        res.status(200).json(tasks);
+    } catch (error) {
+        next(error);
+    }
+};

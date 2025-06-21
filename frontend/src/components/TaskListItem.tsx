@@ -179,9 +179,11 @@ const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails, onEdit
       >
         <MenuItem disabled sx={{fontWeight: 'bold', color: 'text.primary !important'}}>Cambiar Estado a:</MenuItem>
         <Divider />
-        {Object.values(EstadoTarea).filter(estado => estado !== task.estado).map(estado => (
+        {[EstadoTarea.PENDIENTE, EstadoTarea.EN_REVISION, EstadoTarea.COMPLETADA]
+            .filter(estado => estado !== task.estado)
+            .map(estado => (
             <MenuItem key={estado} onClick={() => handleChangeStatus(estado)} dense>
-                {estado}
+              {estado.replace('_', ' ')}
             </MenuItem>
         ))}
       </Menu>

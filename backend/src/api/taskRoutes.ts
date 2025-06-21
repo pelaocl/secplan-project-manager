@@ -1,77 +1,79 @@
-// backend/src/api/taskRoutes.ts
+//backend/src/api/taskRoutes.ts
 import express from 'express';
 import { authenticateToken } from '../middlewares/authMiddleware';
 import { validateRequest } from '../middlewares/validationMiddleware';
-import { createTaskSchema, projectIdSchema, taskIdSchema, updateTaskSchema } from '../schemas/taskSchemas';
+import { createTaskSchema, projectIdSchema, taskIdSchema, updateTaskSchema, myTasksQuerySchema } from '../schemas/taskSchemas';
 import * as taskController from '../controllers/taskController';
-import chatMessageRoutes from './chatMessageRoutes'; // <-- IMPORTAR
+import chatMessageRoutes from './chatMessageRoutes';
 
-// Importa un middleware de autorización de roles si lo tienes (ej. authorizeRole)
-// import { authorizeRole } from '../middlewares/roleMiddleware';
-// import { Role } from '@prisma/client'; // Si usas authorizeRole
+// El router ahora NO necesita mergeParams, ya que todas las rutas se definen aquí
+const router = express.Router();
 
-const router = express.Router({ mergeParams: true }); // mergeParams es útil si anidas esta ruta
+// --- RUTA INDEPENDIENTE PARA "MIS TAREAS" ---
+// GET /api/tasks/my-tasks
+router.get(
+    '/my-tasks',
+    authenticateToken,
+    validateRequest({ query: myTasksQuerySchema }),
+    taskController.getMyTasksHandler
+);
+
+
+// --- RUTAS DE TAREAS ANIDADAS DENTRO DE UN PROYECTO ---
 
 // Crear una tarea para un proyecto específico
-// POST /api/projects/:projectId/tasks
+// POST /api/tasks/project/:projectId
 router.post(
-    '/', // La ruta base ya incluye /projects/:projectId/ si se monta así
+    '/project/:projectId',
     authenticateToken,
-    // authorizeRole([Role.ADMIN, Role.COORDINADOR]), // Solo Admins/Coordinadores pueden crear
-    validateRequest({ body: createTaskSchema /*, params: projectIdSchema (si no se anida) */ }),
+    validateRequest({ body: createTaskSchema, params: projectIdSchema }),
     taskController.createTaskHandler
 );
 
 // Obtener todas las tareas de un proyecto específico
-// GET /api/projects/:projectId/tasks
+// GET /api/tasks/project/:projectId
 router.get(
-    '/',
+    '/project/:projectId',
     authenticateToken,
-    // projectIdSchema se validaría en el router padre si se anida así: projectRoutes.use('/:projectId/tasks', taskRoutes)
-    // validateRequest({ params: projectIdSchema }),
+    validateRequest({ params: projectIdSchema }),
     taskController.getTasksByProjectHandler
 );
 
-// GET /api/projects/:projectId/tasks/:taskId (Obtener una Tarea por ID)
+// --- Rutas que operan sobre UNA tarea específica, incluyendo projectId para contexto y seguridad ---
+
+// GET /api/tasks/project/:projectId/:taskId
 router.get(
-    '/:taskId', // El :projectId ya es parte de la ruta base donde se monta este router
+    '/project/:projectId/:taskId',
     authenticateToken,
-    validateRequest({ params: taskIdSchema }), // Validamos que taskId sea un número
+    validateRequest({ params: projectIdSchema.merge(taskIdSchema) }),
     taskController.getTaskByIdHandler
 );
 
-// PUT /api/projects/:projectId/tasks/:taskId (Actualizar una Tarea)
+// PUT /api/tasks/project/:projectId/:taskId
 router.put(
-    '/:taskId',
+    '/project/:projectId/:taskId',
     authenticateToken,
     validateRequest({ 
-        params: taskIdSchema, // Valida taskId de la URL
-        body: updateTaskSchema   // Valida el cuerpo de la solicitud
+        params: projectIdSchema.merge(taskIdSchema),
+        body: updateTaskSchema
     }),
     taskController.updateTaskHandler
 );
 
-// DELETE /api/projects/:projectId/tasks/:taskId (Eliminar una Tarea)
+// DELETE /api/tasks/project/:projectId/:taskId
 router.delete(
-    '/:taskId',
+    '/project/:projectId/:taskId',
     authenticateToken,
-    // Aquí podrías añadir un authorizeRole específico si solo Admins pueden borrar
-    // ej: authorizeRole([Role.ADMIN, Role.COORDINADOR]),
-    validateRequest({ params: taskIdSchema }), // Valida taskId de la URL
+    validateRequest({ params: projectIdSchema.merge(taskIdSchema) }),
     taskController.deleteTaskHandler
 );
 
-// PUT /api/projects/:projectId/tasks/:taskId/mark-chat-viewed
+// PUT /api/tasks/project/:projectId/:taskId/mark-chat-viewed
 router.put(
-    '/:taskId/mark-chat-viewed',
+    '/project/:projectId/:taskId/mark-chat-viewed',
     authenticateToken,
-    validateRequest({ params: taskIdSchema }), // Valida que taskId sea un número
-    taskController.markTaskChatAsViewedHandler // Asegúrate que este handler exista en taskController
+    validateRequest({ params: projectIdSchema.merge(taskIdSchema) }),
+    taskController.markTaskChatAsViewedHandler
 );
-
-// Esto manejará rutas como /api/projects/:projectId/tasks/:taskId/messages
-router.use('/:taskId/messages', chatMessageRoutes); 
-// Aquí, :taskId ya es capturado por este router (taskRoutes), y gracias a mergeParams
-// en chatMessageRoutes, chatMessageRoutes también podrá acceder a req.params.taskId.
 
 export default router;

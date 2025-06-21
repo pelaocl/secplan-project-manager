@@ -1,3 +1,4 @@
+//frontend/src/components/layout/TopAppBar.tsx
 import React, { useState } from 'react';
 import {
     AppBar, Toolbar, Typography, Button, Box, Stack, Avatar, Tooltip, IconButton, Menu, MenuItem, useTheme
@@ -9,7 +10,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonIcon from '@mui/icons-material/Person';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import HomeIcon from '@mui/icons-material/Home'; // <--- NUEVO ÍCONO PARA INICIO
+import HomeIcon from '@mui/icons-material/Home';
+import ChecklistIcon from '@mui/icons-material/Checklist';
 
 // --- Store de Autenticación ---
 import { useIsAuthenticated, useCurrentUser, useAuthActions, useCurrentUserRole } from '../../store/authStore';
@@ -77,7 +79,26 @@ function TopAppBar() {
                             <HomeIcon />
                         </IconButton>
                     </Tooltip>
-
+                    
+                    {/* Botón de Mis Tareas (para todos los usuarios logueados) */}
+                    {isAuthenticated && (
+                         <Button
+                            component={RouterLink}
+                            to="/mis-tareas"
+                            color="inherit"
+                            startIcon={<ChecklistIcon />}
+                            sx={{
+                                '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
+                                minWidth: { xs: 'auto' },
+                                px: { xs: 1, sm: 2 }
+                            }}
+                        >
+                            <Box component="span" sx={{ display: { xs: 'none', sm: 'block' } }}>
+                                Mis Tareas
+                            </Box>
+                        </Button>
+                    )}
+                    
                     {/* Botón de Estadísticas (condicional y responsivo) */}
                     {(userRole === 'ADMIN' || userRole === 'COORDINADOR') && (
                         <Button

@@ -1,23 +1,25 @@
-// frontend/src/services/chatMessageApi.ts
 import { apiService } from './apiService';
-import { ChatMessage, PaginatedChatMessages } from '../types'; // Asegúrate que PaginatedChatMessages esté definida
+import { ChatMessage, PaginatedChatMessages } from '../types';
 
-// Definimos el tipo para el payload de creación de mensaje
 interface CreateChatMessagePayload {
     contenido: string; // HTML sanitizado
 }
 
-const PROJECT_API_BASE = '/projects';
+const TASK_API_BASE = '/tasks'; // La ruta base correcta para las tareas
 
 async function createChatMessage(
-    projectId: number,
+    projectId: number, // Mantenemos projectId por si es necesario en el futuro
     taskId: number, 
     data: CreateChatMessagePayload
 ): Promise<ChatMessage> {
     try {
-        const endpoint = `${PROJECT_API_BASE}/${projectId}/tasks/${taskId}/messages`;
-        const newMessage = await apiService.post<ChatMessage>(endpoint, data);
-        return newMessage;
+        // Se usan backticks (`) para una correcta interpolación de variables
+        // y se construye la URL simplificada que definimos en el backend.
+        const endpoint = `${TASK_API_BASE}/${taskId}/messages`;
+
+        console.log(`[chatMessageApi] POSTing to new endpoint: ${endpoint}`);
+        const response = await apiService.post<{ data: ChatMessage }>(endpoint, data);
+        return response.data;
     } catch (error) {
         console.error(`[chatMessageApi] Error creating message for task ${taskId}:`, error);
         throw error;
@@ -28,19 +30,20 @@ async function getChatMessagesByTaskId(
     projectId: number,
     taskId: number, 
     page: number = 1, 
-    limit: number = 20 // O el default que definiste en el backend
+    limit: number = 20
 ): Promise<PaginatedChatMessages> {
     try {
-        // Construir la URL completa anidada
-        const endpoint = `${PROJECT_API_BASE}/${projectId}/tasks/${taskId}/messages?page=${page}&limit=${limit}`;
-        const response = await apiService.get<PaginatedChatMessages>(endpoint);
-        return response;
+        // Se actualiza la URL para que coincida con la nueva estructura de rutas.
+        const endpoint = `${TASK_API_BASE}/${taskId}/messages?page=${page}&limit=${limit}`;
+
+        // La respuesta del backend para esto probablemente esté envuelta en un objeto { data: ... }
+        const response = await apiService.get<{ data: PaginatedChatMessages }>(endpoint);
+        return response.data;
     } catch (error) {
         console.error(`[chatMessageApi] Error fetching messages for task ${taskId}:`, error);
         throw error;
     }
 }
-
 
 export const chatMessageService = {
     createChatMessage,
