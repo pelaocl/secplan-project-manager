@@ -123,7 +123,6 @@ async function main() {
         codigoUnico,
         nombre: nombreProyecto,
         descripcion: `Descripción detallada para ${nombreProyecto}.`,
-        // --- CORRECCIÓN AQUÍ ---
         imageUrls: Math.random() > 0.6 ? [`https://picsum.photos/seed/${codigoUnico}/800/600`] : [],
         direccion: `Calle Ficticia ${randomNumber(100, 1000)}, ${randomElement(sectores)!.nombre}`,
         superficieTerreno: randomNumber(500, 10000),
@@ -154,12 +153,12 @@ async function main() {
 
       await prisma.tarea.create({
         data: {
-          titulo: `${randomElement(taskTitles)!} - ${newProject.nombre.substring(0, 15)}...`,
+          titulo: randomElement(taskTitles)!,
           descripcion: `Descripción de la tarea de ejemplo número ${j+1}.`,
           proyectoId: newProject.id,
           creadorId: taskCreator.id,
           asignadoId: taskAssignee.id,
-          estado: randomElement([EstadoTarea.PENDIENTE, EstadoTarea.PENDIENTE, EstadoTarea.EN_PROGRESO, EstadoTarea.EN_PROGRESO, EstadoTarea.EN_REVISION, EstadoTarea.COMPLETADA])!,
+          estado: randomElement([EstadoTarea.PENDIENTE, EstadoTarea.PENDIENTE, EstadoTarea.EN_REVISION, EstadoTarea.COMPLETADA])!,
           prioridad: randomElement([PrioridadTarea.ALTA, PrioridadTarea.MEDIA, PrioridadTarea.MEDIA, PrioridadTarea.BAJA])!,
           fechaPlazo: randomDueDate,
         }

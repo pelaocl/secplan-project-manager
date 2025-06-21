@@ -25,10 +25,8 @@ enum TipoMoneda {
 
 enum EstadoTarea {
   PENDIENTE
-  EN_PROGRESO
   COMPLETADA
-  EN_REVISION // Ejemplo, si el coordinador necesita revisar antes de cerrar
-  CANCELADA
+  EN_REVISION
 }
 
 enum PrioridadTarea {

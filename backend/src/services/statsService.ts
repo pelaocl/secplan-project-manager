@@ -94,9 +94,7 @@ async function getInversionPorPrograma(filters: DashboardFilters) {
 async function getTareasActivasPorUsuario(filters: DashboardFilters) {
     const whereClause: Prisma.TareaWhereInput = {
         asignadoId: { not: null },
-        estado: { notIn: [EstadoTarea.COMPLETADA, EstadoTarea.CANCELADA] },
-        // --- CORRECCIÓN AQUÍ ---
-        // Se cambió 'project' por 'proyecto' para que coincida con el schema de Prisma
+        estado: { notIn: [EstadoTarea.COMPLETADA] },
         proyecto: buildBaseProjectWhereClause(filters)
     };
     
