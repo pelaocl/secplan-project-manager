@@ -1,3 +1,4 @@
+//frontend/src/schemas/projectFormSchema.ts
 import { z } from 'zod';
 
 // Helper de preproceso: Convierte explícitamente '', null, undefined a null ANTES de otras validaciones.
@@ -24,7 +25,7 @@ const geoJsonFormSchema = z.object({
 export const projectFormSchema = z.object({
   // --- Información Básica ---
   nombre: z.string().min(1, "Nombre es requerido").min(3, "Nombre requiere al menos 3 caracteres"),
-  // Selects Requeridos: deben tener un ID numérico post-coerción
+  imageUrls: z.array(z.string().url({ message: "Una o más URLs no son válidas." })).optional(),
   tipologiaId: z.coerce.number({ required_error: "Tipología es requerida", invalid_type_error: "Tipología inválida" }).int().positive(),
 
   // --- Campos Opcionales Refinados ---

@@ -1,3 +1,4 @@
+//backend/src/schemas/projectSchemas.ts
 import { z } from 'zod';
 import { Role, TipoMoneda } from '@prisma/client'; // Importa el Enum de Prisma
 
@@ -32,6 +33,7 @@ const geoJsonSchema = z.object({
 // Base schema for common fields (used in create and update)
 const projectBaseSchema = z.object({
     nombre: z.string().min(3, "Nombre requiere al menos 3 caracteres"),
+    imageUrls: z.array(z.string().url("Cada ítem debe ser una URL válida.")).optional(),
     tipologiaId: z.number().int("ID de Tipología debe ser un número entero positivo").positive(),
     descripcion: z.string().optional().nullable(),
     direccion: z.string().optional().nullable(),

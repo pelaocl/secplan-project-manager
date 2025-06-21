@@ -103,7 +103,7 @@ model Project {
   nombre                String
   descripcion           String? // Interno
   direccion             String?
-  imagenUrl             String?
+  imageUrls             String[] @default([])
   superficieTerreno     Float? // m²
   superficieEdificacion Float? // m² (nullable)
   ano                   Int? // Año iniciativa

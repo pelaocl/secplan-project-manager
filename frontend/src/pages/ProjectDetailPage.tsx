@@ -54,6 +54,7 @@ import {
 } from '../types';
 import ProjectMap from '../components/ProjectMap';
 import IconDetailItem from '../components/IconDetailItem';
+import ProjectImageSlider from '../components/projects/ProjectImageSlider';
 // SectionPaper ya no se usará como wrapper principal de secciones
 import { ApiError } from '../services/apiService';
 import { useAuthStore, useIsAuthenticated, useCurrentUserRole, useCurrentUser } from '../store/authStore'; // Añadido useCurrentUser
@@ -452,7 +453,7 @@ function ProjectDetailPage() {
     const LeftMenu = (
         <Box
             elevation={1}
-            square={isSmallScreen} // Aunque no se mostrará en small screens si está oculto
+            square={isSmallScreen ? true : undefined} // Aunque no se mostrará en small screens si está oculto
             sx={{
                 width: 280, // Ancho fijo en pantallas grandes
                 position: 'sticky', // Para que se quede fijo al hacer scroll en la página
@@ -562,6 +563,77 @@ function ProjectDetailPage() {
                         )}
                     </Paper>
                 );
+                
+                case 'infoBasica':
+                return (
+                     <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2 }}>
+                        
+                        <Box sx={{
+                            mb: 3,
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            boxShadow: theme.shadows[3],
+                            height: { xs: '250px', sm: '300px', md: '400px' },
+                            width: '100%',
+                            position: 'relative',
+                            bgcolor: theme.palette.grey[200]
+                        }}>
+                            {project.imageUrls && project.imageUrls.length > 0 ? (
+                                <ProjectImageSlider imageUrls={project.imageUrls} />
+                            ) : (
+                                project.location_point || project.area_polygon ? (
+                                    <ProjectMap 
+                                        key={`map-for-${sectionId}`}
+                                        locationPoint={project.location_point} 
+                                        areaPolygon={project.area_polygon} 
+                                        mapHeight="100%"
+                                    />
+                                ) : (
+                                    <Box sx={{display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', color: theme.palette.text.secondary}}>
+                                        <ImageIcon sx={{fontSize: 60, mb:1}}/>
+                                        <Typography>No hay imágenes ni ubicación geográfica definida.</Typography>
+                                    </Box>
+                                )
+                            )}
+                        </Box>
+
+                        <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Detalles Generales</Typography>
+                        <Grid container spacing={2.5}>
+                            {project.unidad?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={BusinessIcon} label="Unidad Municipal" value={project.unidad.nombre} /> </Grid> }
+                            {project.tipologia?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CategoryIcon} label="Tipología" valueComponent={<Chip size="small" label={project.tipologia.nombre} sx={{bgcolor: project.tipologia.colorChip, color: theme.palette.getContrastText(project.tipologia.colorChip || theme.palette.primary.main)}} />} /> </Grid> }
+                            {project.programa?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa.nombre} /> </Grid>}
+                            {project.lineaFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Línea Financ." value={project.lineaFinanciamiento.nombre} /> </Grid>}
+                            {project.etapaActualFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={StairsIcon} label="Etapa Actual" value={project.etapaActualFinanciamiento.nombre} /> </Grid>}
+                            {project.monto != null && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Ref. (${project.tipoMoneda})`} value={formatCurrency(project.monto, project.tipoMoneda)} /> </Grid>}
+                            {project.proyectoPriorizado != null && <Grid item xs={12} sm={6} md={4}><IconDetailItem icon={project.proyectoPriorizado ? CheckBoxIcon : CheckBoxOutlineBlankIcon} label="Priorizado" value={project.proyectoPriorizado ? 'Sí' : 'No'} valueComponent={project.proyectoPriorizado ? <Chip size="small" label="Sí" color="success"/> : <Chip size="small" label="No"/>} /></Grid> }
+                            
+                            {isAuthenticated && project.proyectista && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Proyectista" value={`${project.proyectista.name || '?'} (${project.proyectista.email})`} /> </Grid>}
+                            {isAuthenticated && project.formulador && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Formulador" value={`${project.formulador.name || '?'} (${project.formulador.email})`} /> </Grid>}
+                            {isAuthenticated && project.colaboradores && project.colaboradores.length > 0 && ( <Grid item xs={12} md={4}> <IconDetailItem icon={GroupsIcon} label="Colaboradores" value={project.colaboradores.map(c => c.name || c.email).join(', ')} /> </Grid> )}
+                        </Grid>
+                        
+                        {isAuthenticated && (project.montoAdjudicado !== undefined || project.codigoExpediente || project.codigoLicitacion || project.fechaPostulacion) && (
+                            <>
+                                <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Detalles Financiamiento (Interno)</Typography>
+                                <Grid container spacing={2.5}>
+                                    {project.montoAdjudicado !== undefined && <Grid item xs={12} sm={6}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Adj. (${project.tipoMoneda})`} value={formatCurrency(project.montoAdjudicado, project.tipoMoneda)} /> </Grid> }
+                                    {project.codigoExpediente && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="Cód. Expediente" value={project.codigoExpediente} /> </Grid>}
+                                    {project.codigoLicitacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="ID Licitación" value={project.codigoLicitacion} /> </Grid>}
+                                    {project.fechaPostulacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={EventIcon} label="Fecha Postulación" value={formatDate(project.fechaPostulacion)} /> </Grid>}
+                                </Grid>
+                            </>
+                        )}
+                         <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Registro</Typography>
+                         <Grid container spacing={2.5}>
+                            <Grid item xs={12} sm={6}><IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /></Grid>
+                            <Grid item xs={12} sm={6}><IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /></Grid>
+                         </Grid>
+
+                    </Paper>
+                );
+                
+                
+                
                 case 'descripcion':
                     return (
                          <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2, minHeight: '300px' }}>
@@ -655,67 +727,6 @@ function ProjectDetailPage() {
                         </Paper>
                     );
 
-            case 'infoBasica':
-                return (
-                     <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2 }}>
-                        
-                        <Box sx={{ mb: 3, borderRadius: 2, overflow: 'hidden', boxShadow: theme.shadows[3], minHeight: '300px', display:'flex', alignItems:'center', justifyContent:'center', background: theme.palette.grey[200] }}>
-                            {/* ASUMO que tendrás un campo 'project.imagenUrl' en tu tipo Project */}
-                            {project.imagenUrl ? (
-                                <img 
-                                    src={project.imagenUrl as string} // Casting si sabes que es string
-                                    alt={`Imagen de ${project.nombre}`} 
-                                    style={{ width: '100%', height: 'auto', maxHeight: '450px', display:'block', objectFit: 'contain' }} // 'contain' para ver toda la imagen
-                                />
-                            ) : project.location_point || project.area_polygon ? (
-                                <ProjectMap 
-                                    key={`map-for-${sectionId}`}
-                                    locationPoint={project.location_point} 
-                                    areaPolygon={project.area_polygon} 
-                                    mapHeight="400px" 
-                                />
-                            ) : (
-                                <Box sx={{textAlign: 'center', p:3, color: theme.palette.text.secondary}}>
-                                    <ImageIcon sx={{fontSize: 60, mb:1}}/>
-                                    <Typography>No hay imagen ni ubicación geográfica definida para este proyecto.</Typography>
-                                </Box>
-                            )}
-                        </Box>
-
-                        <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Detalles Generales</Typography>
-                        <Grid container spacing={2.5}>
-                            {project.unidad?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={BusinessIcon} label="Unidad Municipal" value={project.unidad.nombre} /> </Grid> }
-                            {project.tipologia?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={CategoryIcon} label="Tipología" valueComponent={<Chip size="small" label={project.tipologia.nombre} sx={{bgcolor: project.tipologia.colorChip, color: theme.palette.getContrastText(project.tipologia.colorChip || theme.palette.primary.main)}} />} /> </Grid> }
-                            {project.programa?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Programa" value={project.programa.nombre} /> </Grid>}
-                            {project.lineaFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={ArticleIcon} label="Línea Financ." value={project.lineaFinanciamiento.nombre} /> </Grid>}
-                            {project.etapaActualFinanciamiento?.nombre && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={StairsIcon} label="Etapa Actual" value={project.etapaActualFinanciamiento.nombre} /> </Grid>}
-                            {project.monto != null && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Ref. (${project.tipoMoneda})`} value={formatCurrency(project.monto, project.tipoMoneda)} /> </Grid>}
-                            {project.proyectoPriorizado != null && <Grid item xs={12} sm={6} md={4}><IconDetailItem icon={project.proyectoPriorizado ? CheckBoxIcon : CheckBoxOutlineBlankIcon} label="Priorizado" value={project.proyectoPriorizado ? 'Sí' : 'No'} valueComponent={project.proyectoPriorizado ? <Chip size="small" label="Sí" color="success"/> : <Chip size="small" label="No"/>} /></Grid> }
-                            
-                            {isAuthenticated && project.proyectista && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Proyectista" value={`${project.proyectista.name || '?'} (${project.proyectista.email})`} /> </Grid>}
-                            {isAuthenticated && project.formulador && <Grid item xs={12} sm={6} md={4}> <IconDetailItem icon={PersonIcon} label="Formulador" value={`${project.formulador.name || '?'} (${project.formulador.email})`} /> </Grid>}
-                            {isAuthenticated && project.colaboradores && project.colaboradores.length > 0 && ( <Grid item xs={12} md={4}> <IconDetailItem icon={GroupsIcon} label="Colaboradores" value={project.colaboradores.map(c => c.name || c.email).join(', ')} /> </Grid> )}
-                        </Grid>
-                        
-                        {isAuthenticated && (project.montoAdjudicado !== undefined || project.codigoExpediente || project.codigoLicitacion || project.fechaPostulacion) && (
-                            <>
-                                <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Detalles Financiamiento (Interno)</Typography>
-                                <Grid container spacing={2.5}>
-                                    {project.montoAdjudicado !== undefined && <Grid item xs={12} sm={6}> <IconDetailItem icon={AttachMoneyIcon} label={`Monto Adj. (${project.tipoMoneda})`} value={formatCurrency(project.montoAdjudicado, project.tipoMoneda)} /> </Grid> }
-                                    {project.codigoExpediente && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="Cód. Expediente" value={project.codigoExpediente} /> </Grid>}
-                                    {project.codigoLicitacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={FolderZipIcon} label="ID Licitación" value={project.codigoLicitacion} /> </Grid>}
-                                    {project.fechaPostulacion && <Grid item xs={12} sm={6}> <IconDetailItem icon={EventIcon} label="Fecha Postulación" value={formatDate(project.fechaPostulacion)} /> </Grid>}
-                                </Grid>
-                            </>
-                        )}
-                         <Typography variant="h6" component="h3" gutterBottom sx={{fontWeight: 'normal', mt: 3, mb:1.5, borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5}}>Registro</Typography>
-                         <Grid container spacing={2.5}>
-                            <Grid item xs={12} sm={6}><IconDetailItem icon={HistoryIcon} label="Fecha Creación" value={formatDate(project.createdAt)} /></Grid>
-                            <Grid item xs={12} sm={6}><IconDetailItem icon={HistoryIcon} label="Última Modificación" value={formatDate(project.updatedAt)} /></Grid>
-                         </Grid>
-
-                    </Paper>
-                );
             case 'ubicacion':
                 return (
                     <Paper elevation={0} sx={{ p: {xs: 1.5, sm:2, md: 3}, borderRadius: 2, minHeight: '400px', position: 'relative' }}>
@@ -750,6 +761,7 @@ function ProjectDetailPage() {
                 flexGrow: 1, // Ocupa el espacio restante horizontalmente en pantallas grandes
                 // Sin height fijo, sin overflowY: 'auto' aquí. El scroll será de la página.
                 width: '100%', // Para asegurar que en modo apilado ocupe el ancho.
+                minWidth: 0,
             }}
         >
             {isSmallScreen ? (

@@ -12,8 +12,9 @@ import es from 'date-fns/locale/es'; // Importación por defecto para date-fns v
 
 import { ProjectFormValues } from '../schemas/projectFormSchema';
 import { FormOptionsResponse, ProgramaOption, UserOption, DEFAULT_TIPO_MONEDA, EstadoTarea, PrioridadTarea } from '../types';
-import ProjectFormMap from './ProjectFormMap'; // Importamos el mapa
-import TiptapEditor from './TiptapEditor';   // <-- IMPORTAMOS EL NUEVO EDITOR TIPTAP
+import ProjectFormMap from './ProjectFormMap';
+import TiptapEditor from './TiptapEditor'; 
+import UrlChipInput from './UrlChipInput';
 
 interface ProjectFormProps {
     isLoading?: boolean;
@@ -67,9 +68,27 @@ function ProjectForm({ isLoading = false, lookupOptions, isEditMode = false, con
                 <Grid item xs={12}>
                     <Paper elevation={2} sx={{ p: {xs: 2, md: 3} }}>
                         <Typography variant="h6" gutterBottom>Información Básica</Typography>
-                        <Grid container spacing={2}>
+                            <Grid container spacing={2}>
                             <Grid item xs={12} md={8}><Controller name="nombre" control={control} render={({ field }) => ( <TextField {...field} label="Nombre del Proyecto" fullWidth required autoFocus error={!!errors.nombre} helperText={errors.nombre?.message} disabled={isLoading} variant="outlined"/> )}/></Grid>
                             <Grid item xs={12} md={4}><Controller name="ano" control={control} render={({ field }) => ( <TextField {...field} value={field.value ?? ''} label="Año Iniciativa" type="number" fullWidth error={!!errors.ano} helperText={errors.ano?.message} disabled={isLoading} variant="outlined"/> )}/></Grid>
+                            
+                            <Grid item xs={12}>
+                                <Controller
+                                    name="imageUrls"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <UrlChipInput
+                                            label="URLs de Imágenes para el Banner (Opcional)"
+                                            value={field.value || []} // Asegurarse de que el valor sea siempre un array
+                                            onChange={field.onChange}
+                                            error={!!errors.imageUrls}
+                                            helperText={errors.imageUrls?.message}
+                                        />
+                                    )}
+                                />  
+                            </Grid>
+
+
                             <Grid item xs={12} sm={6} md={4}><FormControl fullWidth required error={!!errors.tipologiaId} disabled={isLoading} variant="outlined"><InputLabel id="tipologia-select-label-pf">Tipología</InputLabel><Controller name="tipologiaId" control={control} render={({ field }) => ( <Select {...field} labelId="tipologia-select-label-pf" label="Tipología" value={field.value ?? ''}> {lookupOptions.tipologias.map((o) => ( <MenuItem key={o.id} value={o.id}>{`${o.nombre} (${o.abreviacion})`}</MenuItem> ))} </Select> )}/><FormHelperText>{errors.tipologiaId?.message}</FormHelperText></FormControl></Grid>
                             <Grid item xs={12} sm={6} md={4}><FormControl fullWidth error={!!errors.estadoId} disabled={isLoading} variant="outlined"><InputLabel id="estado-select-label-pf">Estado</InputLabel><Controller name="estadoId" control={control} render={({ field }) => ( <Select {...field} labelId="estado-select-label-pf" label="Estado" value={field.value ?? ''}> <MenuItem value=""><em>(Ninguno)</em></MenuItem> {lookupOptions.estados.map((o) => ( <MenuItem key={o.id} value={o.id}>{o.nombre}</MenuItem> ))} </Select> )}/><FormHelperText>{errors.estadoId?.message}</FormHelperText></FormControl></Grid>
                             <Grid item xs={12} sm={6} md={4}><FormControl fullWidth error={!!errors.unidadId} disabled={isLoading} variant="outlined"><InputLabel id="unidad-select-label-pf">Unidad Municipal</InputLabel><Controller name="unidadId" control={control} render={({ field }) => ( <Select {...field} labelId="unidad-select-label-pf" label="Unidad Municipal" value={field.value ?? ''}> <MenuItem value=""><em>(Ninguna)</em></MenuItem> {lookupOptions.unidades.map((o) => ( <MenuItem key={o.id} value={o.id}>{o.nombre}</MenuItem> ))} </Select> )}/><FormHelperText>{errors.unidadId?.message}</FormHelperText></FormControl></Grid>

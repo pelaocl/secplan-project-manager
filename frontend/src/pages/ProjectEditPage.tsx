@@ -1,6 +1,4 @@
-// ========================================================================
-// INICIO: Contenido COMPLETO y FINAL para ProjectEditPage.tsx (v13 - Corregido)
-// ========================================================================
+//frontend/src/pages/ProjectEditPage.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm, Controller, FormProvider } from 'react-hook-form';
@@ -66,6 +64,7 @@ function ProjectEditPage() {
             // Mapeo de datos (asegúrate que los nombres coincidan con tu ProjectFormSchemaType)
              const defaultFormData: Partial<ProjectFormSchemaType> = { // Usa Partial para seguridad
                  nombre: fetchedProject.nombre || '',
+                 imageUrls: fetchedProject.imageUrls || [],
                  tipologiaId: fetchedProject.tipologia?.id, // Ya no necesita ?? undefined si el schema lo maneja
                  descripcion: fetchedProject.descripcion ?? null,
                  direccion: fetchedProject.direccion ?? null,
@@ -212,6 +211,3 @@ function ProjectEditPage() {
 }
 
 export default ProjectEditPage;
-// ========================================================================
-// FIN: Contenido COMPLETO y FINAL para ProjectEditPage.tsx (v13 - Corregido)
-// ========================================================================

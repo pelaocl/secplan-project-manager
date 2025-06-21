@@ -51,6 +51,7 @@ const getProjectSelectFields = (user?: AuthenticatedUser): Prisma.ProjectSelect 
         codigoUnico: true, 
         nombre: true, 
         descripcion: true, 
+        imageUrls: true,
         direccion: true, 
         superficieTerreno: true,
         superficieEdificacion: true, 
@@ -238,6 +239,7 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
         codigoUnico,
         nombre: data.nombre,
         descripcion: data.descripcion ?? null,
+        imageUrls: data.imageUrls ?? [],
         direccion: data.direccion ?? null,
         superficieTerreno: parseFloatOptional(data.superficieTerreno),
         superficieEdificacion: parseFloatOptional(data.superficieEdificacion),
@@ -339,6 +341,7 @@ export const updateProject = async (id: number, data: UpdateProjectInput, user: 
     // Mapea campos simples y parseados si están presentes en 'data'
     if ('nombre' in data) updateData.nombre = data.nombre;
     if ('descripcion' in data) updateData.descripcion = data.descripcion; // Permite setear a null
+    if ('imageUrls' in data) updateData.imageUrls = { set: data.imageUrls || [] };
     if ('direccion' in data) updateData.direccion = data.direccion; // Permite setear a null
     if ('ano' in data) updateData.ano = parseIntAno(data.ano);
     if ('proyectoPriorizado' in data) updateData.proyectoPriorizado = data.proyectoPriorizado;
