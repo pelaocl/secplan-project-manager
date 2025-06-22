@@ -4,7 +4,7 @@ import { AuthenticatedRequest, UserPayload } from '../types/express';
 import { notificationService } from '../services/notificationService';
 import { GetNotificationsQuery } from '../schemas/notificationSchemas';
 import { BadRequestError } from '../utils/errors';
-
+import { CategoriaNotificacion } from '@prisma/client';
 
 export const getNotificationsHandler = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -16,8 +16,24 @@ export const getNotificationsHandler = async (req: AuthenticatedRequest, res: Re
         
         const query = req.validatedQuery as GetNotificationsQuery;
 
-        const notifications = await notificationService.getNotificationsForUser(userPayload.id, query.soloNoLeidas);
-        const unreadCount = notifications.filter(n => !n.leida).length; // O calcula esto en el servicio
+        // --- INICIO DE MODIFICACIÓN: Leer y validar la categoría del query ---
+        const categoriaQuery = req.query.categoria as string;
+        let categoria: CategoriaNotificacion | undefined;
+
+        if (categoriaQuery) {
+            if (Object.values(CategoriaNotificacion).includes(categoriaQuery.toUpperCase() as CategoriaNotificacion)) {
+                categoria = categoriaQuery.toUpperCase() as CategoriaNotificacion;
+            } else {
+                throw new BadRequestError("Valor de 'categoria' inválido. Debe ser 'SISTEMA' o 'CHAT'.");
+            }
+        }
+
+        // Pasar la categoría al servicio
+        const notifications = await notificationService.getNotificationsForUser(userPayload.id, query.soloNoLeidas, categoria);
+        
+        // El conteo de no leídas ahora viene por socket, esta respuesta es principalmente para la lista
+        const unreadCount = notifications.filter(n => !n.leida).length; 
+        // --- FIN DE MODIFICACIÓN ---
 
         res.status(200).json({ notifications, unreadCount });
     } catch (error) {
@@ -58,7 +74,22 @@ export const markAllAsReadHandler = async (req: AuthenticatedRequest, res: Respo
             return;
         }
 
-        const result = await notificationService.markAllNotificationsAsReadForUser(userPayload.id);
+        // --- INICIO DE MODIFICACIÓN: Leer y validar la categoría del query ---
+        const categoriaQuery = req.query.categoria as string;
+        let categoria: CategoriaNotificacion | undefined;
+
+        if (categoriaQuery) {
+            if (Object.values(CategoriaNotificacion).includes(categoriaQuery.toUpperCase() as CategoriaNotificacion)) {
+                categoria = categoriaQuery.toUpperCase() as CategoriaNotificacion;
+            } else {
+                throw new BadRequestError("Valor de 'categoria' inválido. Debe ser 'SISTEMA' o 'CHAT'.");
+            }
+        }
+
+        // Pasar la categoría al servicio. Si no se provee, marca todas.
+        const result = await notificationService.markAllNotificationsAsReadForUser(userPayload.id, categoria);
+        // --- FIN DE MODIFICACIÓN ---
+
         res.status(200).json({ message: `${result.count} notificaciones marcadas como leídas.` });
     } catch (error) {
         next(error);

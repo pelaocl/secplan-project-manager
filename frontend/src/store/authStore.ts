@@ -14,35 +14,45 @@ interface AuthState {
     user: UserWithEtiquetas | null;
     token: string | null;
     isAuthenticated: boolean;
-    isLoading: boolean; // Para indicar si hay una operación de auth en curso o carga inicial
+    isLoading: boolean;
     error: string | null;
+    systemUnreadCount: number; // Contador para la campana de sistema
+    chatUnreadCount: number;   // Contador para el nuevo icono de chat
     actions: {
-        login: (token: string, user: UserWithEtiquetas) => void;
-        logout: () => void;
-        setUser: (user: UserWithEtiquetas | null) => void;
-        setLoading: (loading: boolean) => void;
-        setError: (error: string | null) => void;
-        // Nueva acción para manejar la conexión del socket después de la rehidratación
-        connectSocketOnRehydrate: () => void;
+      login: (token: string, user: UserWithEtiquetas) => void;
+      logout: () => void;
+      setUser: (user: UserWithEtiquetas | null) => void;
+      setLoading: (loading: boolean) => void;
+      setError: (error: string | null) => void;
+      setUnreadCounts: (counts: { systemCount: number; chatCount: number }) => void; // Nueva acción
+      connectSocketOnRehydrate: () => void;
     };
-}
+  }
 
 export const useAuthStore = create<AuthState>()(
     persist(
         (set, get) => ({
-            // Estado inicial
             user: null,
             token: null,
             isAuthenticated: false,
-            // isLoading: true, // Iniciar como true para que App.tsx pueda mostrar un loader al inicio
-            isLoading: true, // <<<----- INICIAMOS isLoading en true
+            isLoading: true,
             error: null,
+            systemUnreadCount: 0,
+            chatUnreadCount: 0,
 
             // Acciones para modificar el estado
             actions: {
                 login: (token, user) => {
                     console.log('[AuthStore] Logging in user:', user);
-                    set({ token, user, isAuthenticated: true, error: null, isLoading: false });
+                    set({ 
+                        token, 
+                        user, 
+                        isAuthenticated: true, 
+                        error: null, 
+                        isLoading: false, 
+                        systemUnreadCount: 0, // Reset
+                        chatUnreadCount: 0    // Reset
+                    });
                     // localStorage es manejado por 'persist' middleware para token, user, isAuthenticated
                     
                     // Conectar Socket.IO
@@ -55,7 +65,15 @@ export const useAuthStore = create<AuthState>()(
                     console.log('[AuthStore] Logging out...');
                     // Desconectar Socket.IO ANTES de limpiar el estado
                     socketService.disconnect(); 
-                    set({ token: null, user: null, isAuthenticated: false, error: null, isLoading: false });
+                    set({ 
+                        token: null, 
+                        user: null, 
+                        isAuthenticated: false, 
+                        error: null, 
+                        isLoading: false, 
+                        systemUnreadCount: 0, // Reset
+                        chatUnreadCount: 0    // Reset
+                    });
                     // 'persist' middleware limpiará los campos parcializados de localStorage
                 },
                 setUser: (user) => {
@@ -67,6 +85,12 @@ export const useAuthStore = create<AuthState>()(
                 },
                 setLoading: (isLoading) => set({ isLoading }),
                 setError: (error) => set({ error, isLoading: false }),
+                
+                setUnreadCounts: (counts) => {
+                    console.log('[AuthStore] Updating unread counts:', counts);
+                    set({ systemUnreadCount: counts.systemCount, chatUnreadCount: counts.chatCount });
+                },
+                
                 connectSocketOnRehydrate: () => {
                     const { token, isAuthenticated } = get();
                     if (isAuthenticated && token) {
@@ -105,6 +129,7 @@ export const useCurrentUser = () => useAuthStore((state) => state.user);
 export const useAuthIsLoading = () => useAuthStore((state) => state.isLoading);
 export const useAuthError = () => useAuthStore((state) => state.error);
 export const useCurrentUserRole = () => useAuthStore((state) => state.user?.role ?? null);
-
+export const useSystemUnreadCount = () => useAuthStore((state) => state.systemUnreadCount);
+export const useChatUnreadCount = () => useAuthStore((state) => state.chatUnreadCount);
 // Para invocar la conexión del socket después de la rehidratación,
 // lo haremos desde App.tsx usando un useEffect para mayor control y claridad.

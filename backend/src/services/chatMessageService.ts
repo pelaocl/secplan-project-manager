@@ -151,7 +151,7 @@ export const createChatMessage = async (
 
     // 2. Notificación general de nuevo mensaje, aplicando la lógica de roles original
     const nombreRemitente = remitentePayload.name || remitentePayload.email;
-    const mensajeNotificacion = `${nombreRemitente} envió un mensaje en la tarea "${tarea.titulo}".`;
+    const mensajeNotificacion = `${nombreRemitente} envió un mensaje en la tarea "${tarea.titulo}" del proyecto [${tarea.proyecto.codigoUnico}] ${tarea.proyecto.nombre}.`;
     
     const interesadosPotencialesIds = new Set<number>();
     if (tarea.creadorId) interesadosPotencialesIds.add(tarea.creadorId);

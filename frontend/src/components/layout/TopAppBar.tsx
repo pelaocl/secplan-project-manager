@@ -18,7 +18,7 @@ import { useIsAuthenticated, useCurrentUser, useAuthActions, useCurrentUserRole 
 
 // --- Otros Componentes ---
 import NotificationBell from './NotificationBell';
-
+import ChatNotificationBell from './ChatNotificationBell';
 // --- Helper para Iniciales ---
 const getInitials = (name?: string | null): string => {
     if (!name) return '?';
@@ -130,6 +130,7 @@ function TopAppBar() {
                 {/* --- Menú de Usuario a la Derecha --- */}
                 {isAuthenticated && currentUser ? (
                     <Stack direction="row" spacing={1} alignItems="center">
+                        <ChatNotificationBell />
                         <NotificationBell />
                         
                         <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontWeight: 500 }}>
