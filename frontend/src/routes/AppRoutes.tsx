@@ -62,7 +62,7 @@ function AppRoutes() {
                 <Route 
                     path="/projects/:id/edit" 
                     element={ 
-                        <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.COORDINADOR]}>
+                        <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.COORDINADOR, ROLES.USUARIO]}>
                             <ErrorBoundary fallbackMessage="Error al cargar el formulario de edición.">
                                 <ProjectEditPage />
                             </ErrorBoundary>

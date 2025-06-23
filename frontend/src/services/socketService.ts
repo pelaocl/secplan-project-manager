@@ -29,7 +29,8 @@ const connect = (token: string): void => {
 
     socket.on('connect', () => {
         console.log('[SocketService] Conectado al servidor Socket.IO con ID:', socket?.id);
-        socket?.emit('test_event_from_client', { message: 'Hola desde el cliente!' });
+        console.log('[SocketService] Conexión exitosa, pidiendo contadores iniciales...');
+        socket?.emit('request_initial_counts');
     });
 
     socket.on('disconnect', (reason: Socket.DisconnectReason) => {

@@ -373,48 +373,66 @@ export const updateProject = async (id: number, data: UpdateProjectInput, user: 
         });
         console.log(`[updateProject] Project ${id} updated successfully by User ${user.id}`);
 
-        // 4. LÓGICA DE NOTIFICACIÓN CORRECTA
+        // --- Lógica de Notificación Específica por Rol ---
         const notifyingUserIds = new Set<number>().add(user.id);
         const urlDestino = `/projects/${updatedProject.id}`;
-        let wasModified = false;
 
-        const checkRoleChange = (oldId: number | null, newId: number | null) => {
-            if (oldId !== newId) wasModified = true;
-            if (oldId && oldId !== newId) notifyingUserIds.add(oldId);
-            if (newId && newId !== oldId) notifyingUserIds.add(newId);
+        const checkAndNotifyRoleChange = async (oldId: number | null, newId: number | null, roleName: string) => {
+            if (newId !== oldId) {
+                // Notificar al ROL ANTERIOR (si existía y no es el usuario que hace el cambio)
+                if (oldId && oldId !== user.id) {
+                    const message = `Ya no estás asignado como ${roleName} al proyecto "${updatedProject.nombre}".`;
+                    await notificationService.createDBNotification({ usuarioId: oldId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+                }
+                // Notificar al ROL NUEVO (si existe y no es el usuario que hace el cambio)
+                if (newId && newId !== user.id) {
+                    const message = `Se te ha asignado como ${roleName} al proyecto "${updatedProject.nombre}".`;
+                    await notificationService.createDBNotification({ usuarioId: newId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+                    notifyingUserIds.add(newId); // Lo añadimos para no notificarlo dos veces
+                }
+            }
         };
-        
-        checkRoleChange(projectBeforeUpdate.proyectistaId, updatedProject.proyectistaId);
-        checkRoleChange(projectBeforeUpdate.formuladorId, updatedProject.formuladorId);
 
+        // 1. Comprobar y notificar cambios para Proyectista y Formulador
+        await checkAndNotifyRoleChange(projectBeforeUpdate.proyectistaId, updatedProject.proyectistaId, 'proyectista');
+        await checkAndNotifyRoleChange(projectBeforeUpdate.formuladorId, updatedProject.formuladorId, 'formulador');
+        
+        // 2. Comprobar y notificar cambios para Colaboradores
         const oldColabIds = new Set(projectBeforeUpdate.colaboradores.map(c => c.id));
         const newColabIds = new Set(updatedProject.colaboradores?.map(c => c.id) ?? []);
         
-        oldColabIds.forEach(id => { if (!newColabIds.has(id)) { wasModified = true; notifyingUserIds.add(id); } });
-        newColabIds.forEach(id => { if (!oldColabIds.has(id)) { wasModified = true; notifyingUserIds.add(id); } });
-        
-        // Notificar a todos los involucrados (antiguos y nuevos) sobre el cambio de equipo
-        for (const userId of notifyingUserIds) {
-            if (userId === user.id) continue; // No notificar a quien hizo el cambio
-            const message = `Se ha actualizado el equipo de trabajo del proyecto "${updatedProject.nombre}". Revisa los nuevos roles y miembros.`;
-            await notificationService.createDBNotification({ usuarioId: userId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+        // Notificar a los nuevos colaboradores añadidos
+        for (const newId of newColabIds) {
+            if (!oldColabIds.has(newId) && newId !== user.id) {
+                const message = `Has sido añadido como colaborador al proyecto "${updatedProject.nombre}".`;
+                await notificationService.createDBNotification({ usuarioId: newId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+                notifyingUserIds.add(newId);
+            }
+        }
+        // Notificar a los colaboradores eliminados
+        for (const oldId of oldColabIds) {
+            if (!newColabIds.has(oldId) && oldId !== user.id) {
+                const message = `Ya no eres colaborador del proyecto "${updatedProject.nombre}".`;
+                await notificationService.createDBNotification({ usuarioId: oldId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+            }
         }
 
-        // Notificación general de modificación de ficha (Regla 1.3)
-        // Se envía solo si hubo cambios que no son de equipo y solo a los miembros actuales
+        // 3. Notificación general de modificación de ficha (Regla 1.3)
         const teamRelatedKeys: (keyof UpdateProjectInput)[] = ['proyectistaId', 'formuladorId', 'colaboradoresIds'];
         const otherChanges = Object.keys(data).some(key => !teamRelatedKeys.includes(key as any));
 
         if (otherChanges) {
             const currentTeamIds = new Set([updatedProject.proyectistaId, updatedProject.formuladorId, ...(updatedProject.colaboradores?.map(c => c.id) ?? [])].filter((id): id is number => id !== null));
             for (const teamMemberId of currentTeamIds) {
-                if (!notifyingUserIds.has(teamMemberId)) { // No enviar si ya recibió notificación de cambio de rol
+                if (!notifyingUserIds.has(teamMemberId)) { // No enviar si ya recibió una notificación específica de cambio de rol
                     const message = `La ficha del proyecto "${updatedProject.nombre}" ha sido actualizada.`;
+                    // Usamos un tipo de notificación más genérico para esto
                     await notificationService.createDBNotification({ usuarioId: teamMemberId, tipo: TipoNotificacion.TAREA_ACTUALIZADA_INFO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
                 }
             }
         }
-        
+        // --- Fin Lógica de Notificación Específica por Rol ---
+     
         return updatedProject;
     } catch (error) {
         console.error(`[updateProject] Error during prisma.project.update for ID ${id}:`, error);

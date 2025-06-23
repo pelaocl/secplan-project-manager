@@ -6,7 +6,6 @@ import { Notificacion, CategoriaNotificacion } from '../../types';
 import NotificationItem from '../NotificationItem';
 // --- INICIO DE MODIFICACIÓN: Importar el hook correcto y quitar socketService ---
 import { useAuthStore, useSystemUnreadCount } from '../../store/authStore';
-// --- FIN DE MODIFICACIÓN ---
 
 const NotificationBell: React.FC = () => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -15,9 +14,10 @@ const NotificationBell: React.FC = () => {
     
     // --- INICIO DE MODIFICACIÓN: Usar el contador directamente desde el store global ---
     const isAuthenticated = useAuthStore(state => state.isAuthenticated);
-    const systemUnreadCount = useSystemUnreadCount(); // <-- Este es el contador reactivo
+    const systemUnreadCount = useSystemUnreadCount(); // <-- Este es el contador reactivo y único que necesitamos
     // --- FIN DE MODIFICACIÓN ---
 
+    // Esta función ahora solo trae la lista de notificaciones para mostrarla en el menú
     const fetchDropdownNotifications = useCallback(async () => {
         if (!isAuthenticated) return;
         setIsLoading(true);
@@ -25,7 +25,7 @@ const NotificationBell: React.FC = () => {
             // Pedimos solo las notificaciones de SISTEMA
             const response = await notificationApi.getNotifications(false, CategoriaNotificacion.SISTEMA);
             setNotifications(response.notifications.slice(0, 10)); 
-            // Ya no necesitamos actualizar un contador local aquí, el global se actualiza por socket
+            // Ya no necesitamos actualizar un contador local aquí.
         } catch (error) {
             console.error("Error fetching system notifications:", error);
         } finally {
@@ -35,8 +35,7 @@ const NotificationBell: React.FC = () => {
 
     // --- INICIO DE MODIFICACIÓN: Eliminar los useEffect redundantes ---
     // Se elimina el useEffect que escuchaba al socket, ya que esa lógica ahora está centralizada.
-    // Se elimina el useEffect que llamaba a fetchDropdownNotifications al montar,
-    // ya que el contador se obtiene por socket y la lista solo se necesita al abrir el menú.
+    // Se elimina el useEffect que obtenía el contador al montar.
     // --- FIN DE MODIFICACIÓN ---
 
     const handleClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -51,6 +50,8 @@ const NotificationBell: React.FC = () => {
     const handleMarkAsRead = async (notificationId: number) => {
         try {
             await notificationApi.markAsRead(notificationId);
+            // El backend ya emitió un evento de socket que actualizó nuestro estado global.
+            // Solo necesitamos refrescar la lista local para que cambie el estilo del item a "leído".
             fetchDropdownNotifications(); 
         } catch (error) {
             console.error("Error marking notification as read:", error);
@@ -59,6 +60,7 @@ const NotificationBell: React.FC = () => {
     
     const handleMarkAllAsRead = async () => {
         try {
+            // Le decimos al backend que marque todas las de SISTEMA como leídas
             await notificationApi.markAllAsRead(CategoriaNotificacion.SISTEMA);
             fetchDropdownNotifications();
         } catch (error) {

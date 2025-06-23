@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, Chip, Divider, useTheme, Paper, IconButton as MuiIconButton, Tooltip, List, ListItem, ListItemAvatar, Avatar
+    Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, Chip, Divider, useTheme, Paper, IconButton as MuiIconButton, Tooltip, List, ListItem, ListItemAvatar, Avatar, ListItemText
 } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
