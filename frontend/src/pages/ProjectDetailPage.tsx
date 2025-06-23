@@ -284,9 +284,10 @@ function ProjectDetailPage() {
     }
 
     // --- Variables de Permisos y Visibilidad (ahora que 'project' existe) ---
-    const canManageProject = isAuthenticated && (userRole === 'ADMIN' || userRole === 'COORDINADOR' || project.proyectistaId === currentUser?.id);
-    const canManageTasks = isAuthenticated && (userRole === 'ADMIN' || userRole === 'COORDINADOR');
-    const showTasksSectionInMenu = isAuthenticated; // Tareas solo visibles si está autenticado
+        const isProyectistaOfThisProject = project?.proyectistaId === currentUser?.id;
+        const canManageProject = isAuthenticated && (userRole === 'ADMIN' || userRole === 'COORDINADOR' || isProyectistaOfThisProject);
+        const canManageTasks = isAuthenticated && (userRole === 'ADMIN' || userRole === 'COORDINADOR' || isProyectistaOfThisProject);
+        const showTasksSectionInMenu = isAuthenticated;
     
     // Filtrado de tareas para la sección "Tareas"
     const filteredTasks = tasks.filter(task => {
@@ -371,17 +372,14 @@ function ProjectDetailPage() {
                     </Tooltip>
                     {canManageProject && (
                         <Tooltip title="Editar Proyecto">
-                             <Button 
-                                component={RouterLink} // Usar RouterLink
-                                to={`/projects/${project.id}/edit`} 
+                            <Button 
+                                component={RouterLink} // 1. Se le dice a MUI que use el Link de Router
+                                to={`/projects/${project.id}/edit`} // 2. Se le pasa la ruta de destino
                                 variant="contained" 
                                 size="small" 
-                                color="primary" // Un color que contraste
+                                color="primary"
                                 startIcon={<EditIcon />}
-                                sx={{
-                                    // color: 'primary.main', bgcolor: 'secondary.main', '&:hover': { bgcolor: 'secondary.dark'}
-                                }}
-                            >
+                                >
                                 {!isSmallScreen && "Editar"}
                             </Button>
                         </Tooltip>

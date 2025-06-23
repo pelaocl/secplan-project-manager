@@ -1,8 +1,9 @@
 // backend/src/services/projectService.ts
-import { Prisma, Role, TipoMoneda } from '@prisma/client';
+import { Prisma, Role, TipoMoneda, TipoNotificacion, TipoRecursoNotificacion } from '@prisma/client';
 import prisma from '../config/prismaClient';
 import { CreateProjectInput, UpdateProjectInput, ListProjectsQuery } from '../schemas/projectSchemas';
 import { ForbiddenError, NotFoundError, BadRequestError, AppError } from '../utils/errors';
+import { notificationService } from './notificationService';
 
 // Interfaz para el usuario autenticado (puedes ajustarla si tiene más campos)
 interface AuthenticatedUser {
@@ -227,14 +228,13 @@ export const findProjectById = async (id: number, user?: AuthenticatedUser) => {
     }
 };
 
+
 // POST /api/projects (Crear)
 export const createProject = async (data: CreateProjectInput, user: AuthenticatedUser) => {
     console.log(`[createProject] Attempting creation by User ${user.id} (${user.role})`);
 
-    // Genera el código único basado en la tipología
     const codigoUnico = await generateCodigoUnico(data.tipologiaId);
 
-    // Prepara el objeto de datos para Prisma, usando los helpers de parseo
     const createData: Prisma.ProjectCreateInput = {
         codigoUnico,
         nombre: data.nombre,
@@ -245,18 +245,15 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
         superficieEdificacion: parseFloatOptional(data.superficieEdificacion),
         ano: parseIntAno(data.ano),
         proyectoPriorizado: data.proyectoPriorizado ?? false,
-        tipoMoneda: data.tipoMoneda ?? TipoMoneda.CLP, // Default a CLP si no se especifica
+        tipoMoneda: data.tipoMoneda ?? TipoMoneda.CLP,
         monto: parseDecimalOptional(data.monto),
         codigoExpediente: data.codigoExpediente ?? null,
         fechaPostulacion: parseDateOptional(data.fechaPostulacion),
         montoAdjudicado: parseDecimalOptional(data.montoAdjudicado),
         codigoLicitacion: data.codigoLicitacion ?? null,
-
         location_point: data.location_point === null ? Prisma.DbNull : (data.location_point as Prisma.InputJsonObject),
         area_polygon: data.area_polygon === null ? Prisma.DbNull : (data.area_polygon as Prisma.InputJsonObject),
-
-        // --- Conexiones a relaciones ---
-        tipologia: { connect: { id: data.tipologiaId } }, // Requerido
+        tipologia: { connect: { id: data.tipologiaId } },
         estado: data.estadoId ? { connect: { id: Number(data.estadoId) } } : undefined,
         unidad: data.unidadId ? { connect: { id: Number(data.unidadId) } } : undefined,
         sector: data.sectorId ? { connect: { id: Number(data.sectorId) } } : undefined,
@@ -264,42 +261,54 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
         formulador: data.formuladorId ? { connect: { id: Number(data.formuladorId) } } : undefined,
         lineaFinanciamiento: data.lineaFinanciamientoId ? { connect: { id: Number(data.lineaFinanciamientoId) } } : undefined,
         programa: data.programaId ? { connect: { id: Number(data.programaId) } } : undefined,
-        etapaActualFinanciamiento: data.etapaFinanciamientoId ? { connect: { id: Number(data.etapaFinanciamientoId) } } : undefined, // Corregido nombre de campo
-
-        // Conectar colaboradores si se proporcionan IDs válidos
+        etapaActualFinanciamiento: data.etapaFinanciamientoId ? { connect: { id: Number(data.etapaFinanciamientoId) } } : undefined,
         ...(data.colaboradoresIds && data.colaboradoresIds.length > 0 && {
             colaboradores: {
-                connect: data.colaboradoresIds
-                    .map(id => Number(id)) // Convertir a número
-                    .filter(id => !isNaN(id) && id > 0) // Filtrar inválidos
-                    .map((id) => ({ id: id })) // Mapear a formato { id: ... }
+                connect: data.colaboradoresIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0).map((id) => ({ id: id }))
             }
         }),
     };
 
-    try {
-        // Intenta crear el proyecto en la BD
+     try {
         const newProject = await prisma.project.create({
             data: createData,
-            select: getProjectSelectFields(user) // Devuelve el proyecto creado con los campos adecuados
+            select: getProjectSelectFields(user)
         });
-        console.log(`[createProject] Project created successfully by user ${user.id} with ID: ${newProject.id}`);
+        console.log(`[createProject] Project created successfully with ID: ${newProject.id}`);
+
+        // Lógica de notificación robusta
+        const notifyingUserIds = new Set<number>().add(user.id);
+        const urlDestino = `/projects/${newProject.id}`;
+
+        if (newProject.proyectistaId && !notifyingUserIds.has(newProject.proyectistaId)) {
+            await notificationService.createDBNotification({ usuarioId: newProject.proyectistaId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: `Se te ha asignado como proyectista al nuevo proyecto "${newProject.nombre}".`, urlDestino, recursoId: newProject.id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e => console.error(e));
+            notifyingUserIds.add(newProject.proyectistaId);
+        }
+        if (newProject.formuladorId && !notifyingUserIds.has(newProject.formuladorId)) {
+            await notificationService.createDBNotification({ usuarioId: newProject.formuladorId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: `Se te ha asignado como formulador al nuevo proyecto "${newProject.nombre}".`, urlDestino, recursoId: newProject.id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e => console.error(e));
+            notifyingUserIds.add(newProject.formuladorId);
+        }
+        if (newProject.colaboradores && newProject.colaboradores.length > 0) {
+            for (const colaborador of newProject.colaboradores) {
+                if (!notifyingUserIds.has(colaborador.id)) {
+                     await notificationService.createDBNotification({ usuarioId: colaborador.id, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: `Has sido añadido como colaborador al nuevo proyecto "${newProject.nombre}".`, urlDestino, recursoId: newProject.id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e => console.error(e));
+                    notifyingUserIds.add(colaborador.id);
+                }
+            }
+        }
+        
         return newProject;
     } catch (error) {
         console.error(`[createProject] Error during prisma.project.create:`, error);
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            // Error de restricción única (ej. codigoUnico duplicado)
             if (error.code === 'P2002') {
-                // Intenta identificar qué campo causó el error (puede ser codigoUnico u otro)
                 const target = (error.meta?.target as string[])?.join(', ');
                 throw new BadRequestError(`Error al crear: El valor para '${target || 'campo único'}' ya existe.`);
             }
-             // Error si un ID de relación (FK) no existe
             if (error.code === 'P2025') {
-                 throw new BadRequestError(`Error al crear: Uno de los IDs relacionados (ej. estado, unidad, proyectista) no existe.`);
+                 throw new BadRequestError(`Error al crear: Uno de los IDs relacionados no existe.`);
              }
         }
-        // Error genérico
         throw new AppError("Error al crear el proyecto en la base de datos", 500);
     }
 };
@@ -309,136 +318,133 @@ export const createProject = async (data: CreateProjectInput, user: Authenticate
 export const updateProject = async (id: number, data: UpdateProjectInput, user: AuthenticatedUser) => {
     console.log(`[updateProject] Attempting update for Project ID ${id} by User ${user.id} (${user.role})`);
 
-    // 1. Buscar el proyecto existente (incluir campos para permisos si es necesario)
-    const existingProject = await prisma.project.findUnique({
+    // 1. OBTENER ESTADO "ANTES" DE LA ACTUALIZACIÓN
+    const projectBeforeUpdate = await prisma.project.findUnique({
         where: { id },
-        select: {
-            id: true,
-            proyectistaId: true, // Necesario para la verificación de permisos de USUARIO
-        }
+        select: { id: true, proyectistaId: true, formuladorId: true, colaboradores: { select: { id: true } } }
     });
 
-    if (!existingProject) {
+    if (!projectBeforeUpdate) {
         throw new NotFoundError(`Proyecto con ID ${id} no encontrado.`);
     }
 
-    // 2. Verificar Permisos
+    // 2. VERIFICAR PERMISOS
     const isAdminOrCoord = user.role === Role.ADMIN || user.role === Role.COORDINADOR;
-    // Asume que un USUARIO puede editar SI es el proyectista asignado
-    const isOwner = user.role === Role.USUARIO && existingProject.proyectistaId === user.id;
+    const isOwner = user.role === Role.USUARIO && projectBeforeUpdate.proyectistaId === user.id;
 
     if (!isAdminOrCoord && !isOwner) {
-        console.warn(`[updateProject] Forbidden attempt: User ${user.id} (${user.role}) tried to update Project ${id} (Proyectista ID: ${existingProject.proyectistaId})`);
         throw new ForbiddenError('No tienes permiso para editar este proyecto.');
     }
 
-    console.log(`[updateProject] Permissions OK for User ${user.id} on Project ${id}. Preparing data...`);
+    // 3. PREPARAR DATOS PARA ACTUALIZAR
+    const updateData: Prisma.ProjectUpdateInput = { /* ... (Toda tu lógica para construir updateData va aquí, sin cambios) ... */ };
+    if ('nombre' in data) updateData.nombre = data.nombre; 
+    if ('descripcion' in data) updateData.descripcion = data.descripcion; 
+    if ('imageUrls' in data) updateData.imageUrls = { set: data.imageUrls || [] }; 
+    if ('direccion' in data) updateData.direccion = data.direccion; 
+    if ('ano' in data) updateData.ano = parseIntAno(data.ano); 
+    if ('proyectoPriorizado' in data) updateData.proyectoPriorizado = data.proyectoPriorizado; 
+    if ('tipoMoneda' in data) updateData.tipoMoneda = data.tipoMoneda; 
+    if ('codigoExpediente' in data) updateData.codigoExpediente = data.codigoExpediente; 
+    if ('codigoLicitacion' in data) updateData.codigoLicitacion = data.codigoLicitacion; 
+    if ('superficieTerreno' in data) updateData.superficieTerreno = parseFloatOptional(data.superficieTerreno); 
+    if ('superficieEdificacion' in data) updateData.superficieEdificacion = parseFloatOptional(data.superficieEdificacion); 
+    if ('monto' in data) updateData.monto = parseDecimalOptional(data.monto); 
+    if ('montoAdjudicado' in data) updateData.montoAdjudicado = parseDecimalOptional(data.montoAdjudicado); 
+    if ('fechaPostulacion' in data) updateData.fechaPostulacion = parseDateOptional(data.fechaPostulacion); 
+    if ('location_point' in data) { updateData.location_point = data.location_point === null ? Prisma.DbNull : (data.location_point as Prisma.InputJsonObject); } 
+    if ('area_polygon' in data) { updateData.area_polygon = data.area_polygon === null ? Prisma.DbNull : (data.area_polygon as Prisma.InputJsonObject); } 
+    if ('tipologiaId' in data && data.tipologiaId !== null) { updateData.tipologia = { connect: { id: Number(data.tipologiaId) } }; } 
+    if ('estadoId' in data) { updateData.estado = data.estadoId === null ? { disconnect: true } : { connect: { id: Number(data.estadoId) } }; } 
+    if ('unidadId' in data) { updateData.unidad = data.unidadId === null ? { disconnect: true } : { connect: { id: Number(data.unidadId) } }; } 
+    if ('sectorId' in data) { updateData.sector = data.sectorId === null ? { disconnect: true } : { connect: { id: Number(data.sectorId) } }; } 
+    if ('proyectistaId' in data) { updateData.proyectista = data.proyectistaId === null ? { disconnect: true } : { connect: { id: Number(data.proyectistaId) } }; } 
+    if ('formuladorId' in data) { updateData.formulador = data.formuladorId === null ? { disconnect: true } : { connect: { id: Number(data.formuladorId) } }; } 
+    if ('lineaFinanciamientoId' in data) { updateData.lineaFinanciamiento = data.lineaFinanciamientoId === null ? { disconnect: true } : { connect: { id: Number(data.lineaFinanciamientoId) } }; } 
+    if ('programaId' in data) { updateData.programa = data.programaId === null ? { disconnect: true } : { connect: { id: Number(data.programaId) } }; } 
+    if ('etapaFinanciamientoId' in data) { updateData.etapaActualFinanciamiento = data.etapaFinanciamientoId === null ? { disconnect: true } : { connect: { id: Number(data.etapaFinanciamientoId) } }; } 
+    if ('colaboradoresIds' in data) { const validIds = (data.colaboradoresIds || []).map(id => Number(id)).filter(id => !isNaN(id) && id > 0); updateData.colaboradores = { set: validIds.map(id => ({ id: id })) }; }
 
-    // 3. Preparar los datos para la actualización (updateData)
-    // Solo incluye campos que realmente vienen en el objeto 'data' de entrada
-    const updateData: Prisma.ProjectUpdateInput = {};
-
-    // Mapea campos simples y parseados si están presentes en 'data'
-    if ('nombre' in data) updateData.nombre = data.nombre;
-    if ('descripcion' in data) updateData.descripcion = data.descripcion; // Permite setear a null
-    if ('imageUrls' in data) updateData.imageUrls = { set: data.imageUrls || [] };
-    if ('direccion' in data) updateData.direccion = data.direccion; // Permite setear a null
-    if ('ano' in data) updateData.ano = parseIntAno(data.ano);
-    if ('proyectoPriorizado' in data) updateData.proyectoPriorizado = data.proyectoPriorizado;
-    if ('tipoMoneda' in data) updateData.tipoMoneda = data.tipoMoneda;
-    if ('codigoExpediente' in data) updateData.codigoExpediente = data.codigoExpediente; // Permite setear a null
-    if ('codigoLicitacion' in data) updateData.codigoLicitacion = data.codigoLicitacion; // Permite setear a null
-
-    // Campos numéricos/decimales parseados
-    if ('superficieTerreno' in data) updateData.superficieTerreno = parseFloatOptional (data.superficieTerreno);
-    if ('superficieEdificacion' in data) updateData.superficieEdificacion = parseFloatOptional (data.superficieEdificacion);
-    if ('monto' in data) updateData.monto = parseDecimalOptional(data.monto);
-    if ('montoAdjudicado' in data) updateData.montoAdjudicado = parseDecimalOptional(data.montoAdjudicado);
-
-    // Campos de fecha parseados
-    if ('fechaPostulacion' in data) updateData.fechaPostulacion = parseDateOptional(data.fechaPostulacion);
-
-    if ('location_point' in data) {
-        updateData.location_point = data.location_point === null ? Prisma.DbNull : (data.location_point as Prisma.InputJsonObject);
-    }
-    if ('area_polygon' in data) {
-        updateData.area_polygon = data.area_polygon === null ? Prisma.DbNull : (data.area_polygon as Prisma.InputJsonObject);
-    }
- 
-    // --- Manejo de Relaciones ---
-    // Nota: Usamos 'in' para verificar si la propiedad existe en 'data',
-    // incluso si su valor es 'null' o 'undefined'.
-
-    // Relaciones 1-a-N / 1-a-1
-    // Si el ID viene, conecta. Si viene explícitamente null, desconecta (si la relación es opcional).
-    if ('tipologiaId' in data && data.tipologiaId !== null) { // Asume tipologiaId no puede ser null
-         updateData.tipologia = { connect: { id: Number(data.tipologiaId) } };
-    }
-    if ('estadoId' in data) {
-        updateData.estado = data.estadoId === null ? { disconnect: true } : { connect: { id: Number(data.estadoId) } };
-    }
-    if ('unidadId' in data) {
-        updateData.unidad = data.unidadId === null ? { disconnect: true } : { connect: { id: Number(data.unidadId) } };
-    }
-     if ('sectorId' in data) {
-        updateData.sector = data.sectorId === null ? { disconnect: true } : { connect: { id: Number(data.sectorId) } };
-    }
-    if ('proyectistaId' in data) {
-        updateData.proyectista = data.proyectistaId === null ? { disconnect: true } : { connect: { id: Number(data.proyectistaId) } };
-    }
-    if ('formuladorId' in data) {
-        updateData.formulador = data.formuladorId === null ? { disconnect: true } : { connect: { id: Number(data.formuladorId) } };
-    }
-    if ('lineaFinanciamientoId' in data) {
-        updateData.lineaFinanciamiento = data.lineaFinanciamientoId === null ? { disconnect: true } : { connect: { id: Number(data.lineaFinanciamientoId) } };
-    }
-    if ('programaId' in data) {
-        updateData.programa = data.programaId === null ? { disconnect: true } : { connect: { id: Number(data.programaId) } };
-    }
-    // Corregido nombre de campo 'etapaFinanciamientoId' a 'etapaActualFinanciamiento' para la relación
-    if ('etapaFinanciamientoId' in data) {
-        updateData.etapaActualFinanciamiento = data.etapaFinanciamientoId === null ? { disconnect: true } : { connect: { id: Number(data.etapaFinanciamientoId) } };
-    }
-
-    // Relación N-a-N (Colaboradores) - Usa 'set' para sincronizar la lista
-    // 'set' reemplaza completamente las conexiones existentes con las nuevas proporcionadas.
-    if ('colaboradoresIds' in data) {
-         const validIds = (data.colaboradoresIds || []) // Asegura que sea un array
-            .map(id => Number(id)) // Convierte a número
-            .filter(id => !isNaN(id) && id > 0); // Filtra IDs inválidos
-        updateData.colaboradores = {
-            set: validIds.map(id => ({ id: id })) // Reemplaza la lista existente
-        };
-        console.log(`[updateProject] Setting colaboradores for project ${id} to IDs: [${validIds.join(', ')}]`);
-    }
-
-    // NO actualizamos 'codigoUnico' aquí. Se genera solo al crear.
-
-    // console.log('[updateProject] Prisma update data:', JSON.stringify(updateData, null, 2)); // Log para depurar (opcional)
-
-    // 4. Realizar la actualización en la BD
     try {
         const updatedProject = await prisma.project.update({
             where: { id },
             data: updateData,
-            select: getProjectSelectFields(user) // Devuelve el proyecto con los campos según el rol
+            select: getProjectSelectFields(user)
         });
         console.log(`[updateProject] Project ${id} updated successfully by User ${user.id}`);
-        return updatedProject; // Devuelve el proyecto actualizado
+
+        // --- Lógica de Notificación Específica por Rol ---
+        const notifyingUserIds = new Set<number>().add(user.id);
+        const urlDestino = `/projects/${updatedProject.id}`;
+
+        const checkAndNotifyRoleChange = async (oldId: number | null, newId: number | null, roleName: string) => {
+            if (newId !== oldId) {
+                // Notificar al ROL ANTERIOR (si existía y no es el usuario que hace el cambio)
+                if (oldId && oldId !== user.id) {
+                    const message = `Ya no estás asignado como ${roleName} al proyecto "${updatedProject.nombre}".`;
+                    await notificationService.createDBNotification({ usuarioId: oldId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+                }
+                // Notificar al ROL NUEVO (si existe y no es el usuario que hace el cambio)
+                if (newId && newId !== user.id) {
+                    const message = `Se te ha asignado como ${roleName} al proyecto "${updatedProject.nombre}".`;
+                    await notificationService.createDBNotification({ usuarioId: newId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+                    notifyingUserIds.add(newId); // Lo añadimos para no notificarlo dos veces
+                }
+            }
+        };
+
+        // 1. Comprobar y notificar cambios para Proyectista y Formulador
+        await checkAndNotifyRoleChange(projectBeforeUpdate.proyectistaId, updatedProject.proyectistaId, 'proyectista');
+        await checkAndNotifyRoleChange(projectBeforeUpdate.formuladorId, updatedProject.formuladorId, 'formulador');
+        
+        // 2. Comprobar y notificar cambios para Colaboradores
+        const oldColabIds = new Set(projectBeforeUpdate.colaboradores.map(c => c.id));
+        const newColabIds = new Set(updatedProject.colaboradores?.map(c => c.id) ?? []);
+        
+        // Notificar a los nuevos colaboradores añadidos
+        for (const newId of newColabIds) {
+            if (!oldColabIds.has(newId) && newId !== user.id) {
+                const message = `Has sido añadido como colaborador al proyecto "${updatedProject.nombre}".`;
+                await notificationService.createDBNotification({ usuarioId: newId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+                notifyingUserIds.add(newId);
+            }
+        }
+        // Notificar a los colaboradores eliminados
+        for (const oldId of oldColabIds) {
+            if (!newColabIds.has(oldId) && oldId !== user.id) {
+                const message = `Ya no eres colaborador del proyecto "${updatedProject.nombre}".`;
+                await notificationService.createDBNotification({ usuarioId: oldId, tipo: TipoNotificacion.PROYECTO_ASIGNADO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+            }
+        }
+
+        // 3. Notificación general de modificación de ficha (Regla 1.3)
+        const teamRelatedKeys: (keyof UpdateProjectInput)[] = ['proyectistaId', 'formuladorId', 'colaboradoresIds'];
+        const otherChanges = Object.keys(data).some(key => !teamRelatedKeys.includes(key as any));
+
+        if (otherChanges) {
+            const currentTeamIds = new Set([updatedProject.proyectistaId, updatedProject.formuladorId, ...(updatedProject.colaboradores?.map(c => c.id) ?? [])].filter((id): id is number => id !== null));
+            for (const teamMemberId of currentTeamIds) {
+                if (!notifyingUserIds.has(teamMemberId)) { // No enviar si ya recibió una notificación específica de cambio de rol
+                    const message = `La ficha del proyecto "${updatedProject.nombre}" ha sido actualizada.`;
+                    // Usamos un tipo de notificación más genérico para esto
+                    await notificationService.createDBNotification({ usuarioId: teamMemberId, tipo: TipoNotificacion.TAREA_ACTUALIZADA_INFO, mensaje: message, urlDestino, recursoId: id, recursoTipo: TipoRecursoNotificacion.PROYECTO }).catch(e=>console.error(e));
+                }
+            }
+        }
+        // --- Fin Lógica de Notificación Específica por Rol ---
+     
+        return updatedProject;
     } catch (error) {
         console.error(`[updateProject] Error during prisma.project.update for ID ${id}:`, error);
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            // Error si intentas conectar un ID de relación que no existe
             if (error.code === 'P2025') {
                  throw new BadRequestError(`Error al actualizar: Uno de los IDs relacionados (ej. estado, unidad, colaborador, etc.) no existe.`);
             }
-             // Error si se viola una restricción única (diferente de la PK) al actualizar
              if (error.code === 'P2002') {
                  const target = (error.meta?.target as string[])?.join(', ');
                  throw new BadRequestError(`Error al actualizar: El valor para '${target || 'campo único'}' ya existe en otro proyecto.`);
              }
         }
-        // Error genérico si no es uno conocido de Prisma
         throw new AppError(`Error al actualizar el proyecto en la base de datos (ID: ${id})`, 500);
     }
 };

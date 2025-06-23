@@ -1,15 +1,30 @@
-// frontend/src/services/notificationApi.ts
 import { apiService } from './apiService';
-import { Notificacion } from '../types'; // Asumiendo que tienes el tipo Notificacion en types.ts
+// --- INICIO DE MODIFICACIÓN: Importar el tipo CategoriaNotificacion ---
+import { Notificacion, CategoriaNotificacion } from '../types';
+// --- FIN DE MODIFICACIÓN ---
 
 export interface NotificationsResponse {
     notifications: Notificacion[];
     unreadCount: number;
 }
 
-async function getNotifications(soloNoLeidas?: boolean): Promise<NotificationsResponse> {
+// --- INICIO DE MODIFICACIÓN: La función ahora acepta 'categoria' ---
+async function getNotifications(
+    soloNoLeidas?: boolean, 
+    categoria?: CategoriaNotificacion
+): Promise<NotificationsResponse> {
     try {
-        const endpoint = `/notifications${soloNoLeidas ? '?soloNoLeidas=true' : ''}`;
+        const params = new URLSearchParams();
+        if (soloNoLeidas) {
+            params.append('soloNoLeidas', 'true');
+        }
+        if (categoria) {
+            params.append('categoria', categoria);
+        }
+        
+        const queryString = params.toString();
+        const endpoint = `/notifications${queryString ? `?${queryString}` : ''}`;
+        
         const data = await apiService.get<NotificationsResponse>(endpoint);
         return data;
     } catch (error) {
@@ -17,6 +32,7 @@ async function getNotifications(soloNoLeidas?: boolean): Promise<NotificationsRe
         throw error;
     }
 }
+// --- FIN DE MODIFICACIÓN ---
 
 async function markAsRead(notificationId: number): Promise<Notificacion> {
     try {
@@ -28,24 +44,31 @@ async function markAsRead(notificationId: number): Promise<Notificacion> {
     }
 }
 
-async function markAllAsRead(): Promise<{ message: string; count: number }> { // Asumiendo que el backend devuelve count
+// --- INICIO DE MODIFICACIÓN: La función ahora acepta 'categoria' ---
+async function markAllAsRead(
+    categoria?: CategoriaNotificacion
+): Promise<{ message: string; count: number }> {
     try {
-        // El backend actualmente devuelve { message: "X notificaciones marcadas como leídas." }
-        // Podríamos ajustar el backend para que también devuelva el count si es útil,
-        // o simplemente confiar en el mensaje por ahora.
-        // Para este ejemplo, asumo que el backend fue ajustado para devolver el count.
-        // Si no, el tipo de retorno aquí sería solo { message: string }.
-        const response = await apiService.put<{ message: string; count: number }>('/notifications/read-all', {});
+        const params = new URLSearchParams();
+        if (categoria) {
+            params.append('categoria', categoria);
+        }
+
+        const queryString = params.toString();
+        const endpoint = `/notifications/read-all${queryString ? `?${queryString}` : ''}`;
+
+        const response = await apiService.put<{ message: string; count: number }>(endpoint, {});
         return response;
     } catch (error) {
         console.error("[notificationApi] Error marking all notifications as read:", error);
         throw error;
     }
 }
+// --- FIN DE MODIFICACIÓN ---
+
 
 async function markTaskChatNotificationsAsRead(taskId: number): Promise<{ message: string; count: number }> {
     try {
-        // La ruta debe coincidir con la que definiste en notificationRoutes.ts en el backend
         const response = await apiService.put<{ message: string; count: number }>(`/notifications/task-chat/${taskId}/read-all`, {});
         console.log(`[notificationApi] Marcadas como leídas notificaciones de chat para tarea ${taskId}, actualizadas: ${response.count}`);
         return response;

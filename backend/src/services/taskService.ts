@@ -347,19 +347,23 @@ export const updateTask = async (
     const isAssignee = existingTask.asignadoId === requestingUserPayload.id;
     const isCreator = existingTask.creadorId === requestingUserPayload.id;
 
-    if (!isAdminOrCoordinator) {
-        const allowedUpdates: (keyof UpdateTaskInput)[] = [];
-        if (isAssignee) allowedUpdates.push('estado'); // Asignado puede cambiar estado
-        if (isCreator) allowedUpdates.push('titulo', 'descripcion', 'fechaPlazo', 'prioridad'); // Creador puede editar más cosas
-
-        for (const key in data) {
-            if (!allowedUpdates.includes(key as keyof UpdateTaskInput)) {
-                throw new ForbiddenError(`No tienes permiso para actualizar el campo '${key}'.`);
+        if (!isAdminOrCoordinator) {
+        // Si el usuario es el CREADOR de la tarea, permitimos que continúe.
+        // Esto le da permiso para editar todos los campos que envíe el formulario.
+        if (isCreator) {
+            // No se necesita ninguna acción aquí; el creador puede editar.
+        } 
+        // Si NO es el creador, pero SÍ es el ASIGNADO, solo puede cambiar el estado.
+        else if (isAssignee) {
+            const keysToUpdate = Object.keys(data);
+            // Si está intentando cambiar más de un campo, o un campo que no es 'estado', se deniega.
+            if (keysToUpdate.length > 1 || (keysToUpdate.length === 1 && keysToUpdate[0] !== 'estado')) {
+                throw new ForbiddenError('Como asignado, solo tienes permiso para cambiar el estado de la tarea.');
             }
-        }
-        const allowedUpdateStatesForAssignee: EstadoTarea[] = [EstadoTarea.COMPLETADA, EstadoTarea.EN_REVISION, EstadoTarea.EN_PROGRESO, EstadoTarea.PENDIENTE];
-        if (data.estado && isAssignee && !allowedUpdateStatesForAssignee.includes(data.estado)) {
-            throw new ForbiddenError(`Como asignado, solo puedes cambiar el estado a valores permitidos.`);
+        } 
+        // Si no es creador ni asignado (y no es admin/coord), no tiene permisos.
+        else {
+            throw new ForbiddenError('No tienes permiso para editar esta tarea.');
         }
     }
     

@@ -139,7 +139,11 @@ export enum TipoRecursoNotificacion {
   TAREA = 'TAREA',
   MENSAJE_CHAT_TAREA = 'MENSAJE_CHAT_TAREA',
   PROYECTO = 'PROYECTO',
-  // Añade otros tipos que hayas definido
+}
+
+export enum CategoriaNotificacion {
+  SISTEMA = 'SISTEMA',
+  CHAT = 'CHAT',
 }
 
 // --- INTERFAZ PARA NOTIFICACIONES ---
@@ -150,6 +154,7 @@ export interface Notificacion {
   fechaCreacion: string | Date; // La API podría devolver string, pero es bueno castear a Date si se usa
   urlDestino?: string | null;
   tipo: TipoNotificacion; // Usa el enum definido arriba
+  categoria: CategoriaNotificacion;
   usuarioId: number; // El ID del usuario al que pertenece esta notificación (no el objeto User completo)
   recursoId?: number | null;
   recursoTipo?: TipoRecursoNotificacion | null; // Usa el enum definido arriba
@@ -192,8 +197,6 @@ export interface Task {
   mensajes?: ChatMessage[]; // Array de mensajes, se cargará en getTaskById
   tieneMensajesNuevosEnChat?: boolean;
   chatStatuses?: { lastReadTimestamp: string | Date | null }[] | null;
-
-  
 }
 
 // --- Tipos para los Inputs de Formularios de Tareas (Frontend) ---
@@ -210,7 +213,6 @@ export interface CreateTaskFrontendInput {
 
 // UpdateTaskFrontendInput es usualmente un Partial del CreateTaskFrontendInput
 export type UpdateTaskFrontendInput = Partial<CreateTaskFrontendInput>;
-
 
 // Tipo para la respuesta paginada de mensajes (si lo necesitas así más adelante)
 export interface PaginatedChatMessages {

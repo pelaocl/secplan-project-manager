@@ -35,6 +35,11 @@ enum PrioridadTarea {
   BAJA
 }
 
+enum CategoriaNotificacion {
+  SISTEMA // Notificaciones de acciones (asignaciones, cambios de estado, etc.)
+  CHAT    // Notificaciones conversacionales (nuevos mensajes, menciones)
+}
+
 enum TipoNotificacion {
   NUEVA_TAREA_ASIGNADA
   NUEVO_MENSAJE_TAREA
@@ -43,6 +48,8 @@ enum TipoNotificacion {
   TAREA_COMPLETADA
   TAREA_VENCIMIENTO_PROXIMO // (Este requeriría un job en el backend para generarse)
   MENCION_EN_TAREA
+  PROYECTO_ASIGNADO // Para notificar cuando un usuario es asignado como proyectista
+
   // Puedes añadir más tipos según necesites
 }
 
@@ -275,6 +282,8 @@ model Notificacion {
   urlDestino    String? // Ej: /projects/1/tasks/5
 
   tipo TipoNotificacion
+  
+  categoria     CategoriaNotificacion @default(SISTEMA)
 
   usuarioId Int // El usuario que recibe la notificación
   usuario   User @relation("NotificacionesParaUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)

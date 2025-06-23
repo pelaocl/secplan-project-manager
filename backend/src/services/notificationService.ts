@@ -1,16 +1,38 @@
-// backend/src/services/notificationService.ts
+//backend/src/services/notificationService.ts
 import prisma from '../config/prismaClient';
-import { Notificacion, TipoNotificacion,TipoRecursoNotificacion } from '@prisma/client';
-// Asumimos que tendrás un CreateNotificationInput, ya sea inferido de Zod o definido manualmente
-// Si usas Zod, importa el tipo:
+import { 
+    Notificacion, 
+    TipoNotificacion, 
+    TipoRecursoNotificacion,
+    CategoriaNotificacion
+} from '@prisma/client';
 import { CreateNotificationInput } from '../schemas/notificationSchemas';
 import { emitToUser } from '../socketManager';
 
-// Así debe comenzar tu función:
+// Helper para determinar la categoría. Esta lógica es clave.
+const getCategoryForType = (tipo: TipoNotificacion): CategoriaNotificacion => {
+    switch (tipo) {
+        case TipoNotificacion.NUEVO_MENSAJE_TAREA:
+        case TipoNotificacion.MENCION_EN_TAREA:
+            return CategoriaNotificacion.CHAT;
+        
+        // El resto se considera de SISTEMA por defecto
+        case TipoNotificacion.NUEVA_TAREA_ASIGNADA:
+        case TipoNotificacion.TAREA_ACTUALIZADA_ESTADO:
+        case TipoNotificacion.TAREA_ACTUALIZADA_INFO:
+        case TipoNotificacion.TAREA_COMPLETADA:
+        case TipoNotificacion.TAREA_VENCIMIENTO_PROXIMO:
+        default:
+            return CategoriaNotificacion.SISTEMA;
+    }
+};
+
 export const createDBNotification = async (
-    data: CreateNotificationInput // Este es el único parámetro
-): Promise<Notificacion> => {    // Esta es la línea 11 o cercana
+    data: CreateNotificationInput
+): Promise<Notificacion> => {
     try {
+        const categoria = getCategoryForType(data.tipo);
+
         const notification = await prisma.notificacion.create({
             data: {
                 usuarioId: data.usuarioId,
@@ -19,19 +41,18 @@ export const createDBNotification = async (
                 urlDestino: data.urlDestino,
                 recursoId: data.recursoId,
                 recursoTipo: data.recursoTipo,
+                categoria: categoria, // Se asigna la categoría correcta aquí
             },
         });
-        console.log(`[NotificationService] Notificación creada en DB para usuario ${data.usuarioId}, tipo ${data.tipo}`);
+        console.log(`[NotificationService] Notificación creada en DB para usuario ${data.usuarioId}, tipo ${data.tipo}, categoria ${categoria}`);
 
-        // Lógica para emitir el conteo de no leídas
-        const unreadCount = await prisma.notificacion.count({
-            where: {
-                usuarioId: data.usuarioId,
-                leida: false,
-            },
-        });
-        emitToUser(data.usuarioId.toString(), 'unread_count_updated', { count: unreadCount });
-        console.log(`[NotificationService] Emitido 'unread_count_updated' para usuario ${data.usuarioId} con count: ${unreadCount}`);
+        const [systemCount, chatCount] = await Promise.all([
+            prisma.notificacion.count({ where: { usuarioId: data.usuarioId, leida: false, categoria: CategoriaNotificacion.SISTEMA } }),
+            prisma.notificacion.count({ where: { usuarioId: data.usuarioId, leida: false, categoria: CategoriaNotificacion.CHAT } })
+        ]);
+
+        emitToUser(data.usuarioId.toString(), 'unread_count_updated', { systemCount, chatCount });
+        console.log(`[NotificationService] Emitido 'unread_count_updated' para usuario ${data.usuarioId} con counts: System=${systemCount}, Chat=${chatCount}`);
         
         return notification;
     } catch (error) {
@@ -42,61 +63,71 @@ export const createDBNotification = async (
 
 export const getNotificationsForUser = async (
     userId: number, 
-    soloNoLeidas?: boolean
+    soloNoLeidas?: boolean,
+    categoria?: CategoriaNotificacion
 ): Promise<Notificacion[]> => {
     return prisma.notificacion.findMany({
         where: {
             usuarioId: userId,
-            ...(soloNoLeidas && { leida: false }), // Añade filtro si soloNoLeidas es true
+            ...(soloNoLeidas && { leida: false }),
+            ...(categoria && { categoria: categoria }),
         },
-        orderBy: {
-            fechaCreacion: 'desc',
-        },
-        take: 50, // Limita la cantidad de notificaciones devueltas
+        orderBy: { fechaCreacion: 'desc' },
+        take: 50,
     });
 };
 
 export const markNotificationAsRead = async (
     notificationId: number,
-    userId: number // Para asegurar que el usuario solo marque sus propias notificaciones
+    userId: number
 ): Promise<Notificacion | null> => {
-    // Verifica que la notificación pertenezca al usuario antes de marcarla como leída
     const notification = await prisma.notificacion.findFirst({
-        where: {
-            id: notificationId,
-            usuarioId: userId,
-        }
+        where: { id: notificationId, usuarioId: userId }
     });
 
     if (!notification) {
-        // No encontrado o no pertenece al usuario, no hacer nada o lanzar error
         console.warn(`[NotificationService] Intento de marcar como leída notificación ${notificationId} por usuario ${userId} falló: No encontrada o sin permiso.`);
         return null; 
     }
 
     if (notification.leida) {
-        return notification; // Ya está leída
+        return notification;
     }
 
-    return prisma.notificacion.update({
+    const updatedNotification = await prisma.notificacion.update({
         where: { id: notificationId },
         data: { leida: true },
     });
+
+    const [systemCount, chatCount] = await Promise.all([
+        prisma.notificacion.count({ where: { usuarioId: userId, leida: false, categoria: CategoriaNotificacion.SISTEMA } }),
+        prisma.notificacion.count({ where: { usuarioId: userId, leida: false, categoria: CategoriaNotificacion.CHAT } })
+    ]);
+    emitToUser(userId.toString(), 'unread_count_updated', { systemCount, chatCount });
+
+    return updatedNotification;
 };
 
 export const markAllNotificationsAsReadForUser = async (
-    userId: number
+    userId: number,
+    categoria?: CategoriaNotificacion
 ): Promise<{ count: number }> => {
+    const whereClause: any = { usuarioId: userId, leida: false };
+    if (categoria) {
+        whereClause.categoria = categoria;
+    }
     const result = await prisma.notificacion.updateMany({
-        where: {
-            usuarioId: userId,
-            leida: false,
-        },
-        data: {
-            leida: true,
-        },
+        where: whereClause,
+        data: { leida: true },
     });
-    return { count: result.count }; // Devuelve el número de notificaciones actualizadas
+    if (result.count > 0) {
+        const [systemCount, chatCount] = await Promise.all([
+            prisma.notificacion.count({ where: { usuarioId: userId, leida: false, categoria: CategoriaNotificacion.SISTEMA } }),
+            prisma.notificacion.count({ where: { usuarioId: userId, leida: false, categoria: CategoriaNotificacion.CHAT } })
+        ]);
+        emitToUser(userId.toString(), 'unread_count_updated', { systemCount, chatCount });
+    }
+    return { count: result.count };
 };
 
 export const markTaskChatNotificationsAsRead = async (
@@ -104,43 +135,31 @@ export const markTaskChatNotificationsAsRead = async (
     taskId: number
 ): Promise<{ count: number }> => {
     console.log(`[NotificationService - STEP 3] markTaskChatNotificationsAsRead llamado para userId: ${userId}, taskId: ${taskId}`);
-    
     const targetUrlPart = `/tasks/${taskId}`; 
-
     const result = await prisma.notificacion.updateMany({
         where: {
             usuarioId: userId,
-            // Ahora buscamos ambos tipos de notificaciones relacionadas al chat
-            tipo: {
-                in: [
-                    TipoNotificacion.NUEVO_MENSAJE_TAREA,
-                    TipoNotificacion.MENCION_EN_TAREA
-                ]
-            },
-            urlDestino: {
-                contains: targetUrlPart,
-            },
+            tipo: { in: [TipoNotificacion.NUEVO_MENSAJE_TAREA, TipoNotificacion.MENCION_EN_TAREA] },
+            urlDestino: { contains: targetUrlPart },
             leida: false,
         },
-        data: {
-            leida: true,
-        },
+        data: { leida: true },
     });
     console.log(`[NotificationService - STEP 4] Notificaciones de chat (que contienen '${targetUrlPart}') actualizadas a leida=true: ${result.count} para usuario ${userId}.`);
 
     if (result.count > 0) { 
-        const unreadCount = await prisma.notificacion.count({
-            where: { usuarioId: userId, leida: false }
-        });
-        console.log(`[NotificationService - STEP 5] Nuevo conteo total de no leídas para usuario ${userId} es ${unreadCount}. Emitiendo 'unread_count_updated'.`);
-        emitToUser(userId.toString(), 'unread_count_updated', { count: unreadCount });
+        const [systemCount, chatCount] = await Promise.all([
+            prisma.notificacion.count({ where: { usuarioId: userId, leida: false, categoria: CategoriaNotificacion.SISTEMA } }),
+            prisma.notificacion.count({ where: { usuarioId: userId, leida: false, categoria: CategoriaNotificacion.CHAT } })
+        ]);
+        console.log(`[NotificationService - STEP 5] Nuevo conteo total de no leídas para usuario ${userId} es ${systemCount + chatCount}. Emitiendo 'unread_count_updated'.`);
+        emitToUser(userId.toString(), 'unread_count_updated', { systemCount, chatCount });
     } else {
-        console.log(`[NotificationService - STEP 5] No se actualizaron notificaciones (quizás ya estaban leídas o no habían que coincidieran con el filtro de URL), no se emite 'unread_count_updated' por esta acción.`);
+        console.log(`[NotificationService - STEP 5] No se actualizaron notificaciones, no se emite 'unread_count_updated' por esta acción.`);
     }
     return { count: result.count };
 };
 
-// Exporta un objeto con las funciones para que el import sea más limpio
 export const notificationService = {
     createDBNotification,
     getNotificationsForUser,

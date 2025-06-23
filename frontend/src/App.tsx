@@ -1,25 +1,20 @@
-// frontend/src/App.tsx
-import React, { useEffect } from 'react'; // Añadido useEffect
+import React, { useEffect } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import AppRoutes from './routes/AppRoutes';
 import TopAppBar from './components/layout/TopAppBar';
-import { useAuthStore } from './store/authStore'; // Importar el store completo
+import { useAuthStore } from './store/authStore';
+// --- INICIO DE MODIFICACIÓN: Importar el nuevo Provider ---
+import { TaskModalProvider } from './context/TaskModalContext';
+// --- FIN DE MODIFICACIÓN ---
 
 function App() {
-    // Obtener la acción y el estado de carga del store
     const connectSocketOnRehydrate = useAuthStore((state) => state.actions.connectSocketOnRehydrate);
     const isLoadingAuth = useAuthStore((state) => state.isLoading);
 
     useEffect(() => {
-        // Esta función se llamará una vez cuando App se monte.
-        // La acción connectSocketOnRehydrate internamente revisará
-        // si hay un token y el usuario está autenticado (después de la rehidratación de Zustand)
-        // y conectará el socket si es necesario, luego pondrá isLoading a false.
         connectSocketOnRehydrate();
-    }, [connectSocketOnRehydrate]); // El linter de React podría pedir esta dependencia
+    }, [connectSocketOnRehydrate]);
 
-    // Muestra un loader mientras el store de auth se inicializa y
-    // se intenta la conexión del socket si hay sesión persistida.
     if (isLoadingAuth) {
         return (
             <Box 
@@ -35,21 +30,25 @@ function App() {
     }
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <TopAppBar />
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    py: 4,
-                    px: 3,
-                    width: '100%',
-                    boxSizing: 'border-box'
-                }}
-            >
-                <AppRoutes />
+        // --- INICIO DE MODIFICACIÓN: Envolver la aplicación con el Provider ---
+        <TaskModalProvider>
+            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                <TopAppBar />
+                <Box
+                    component="main"
+                    sx={{
+                        flexGrow: 1,
+                        py: 4,
+                        px: 3,
+                        width: '100%',
+                        boxSizing: 'border-box'
+                    }}
+                >
+                    <AppRoutes />
+                </Box>
             </Box>
-        </Box>
+        </TaskModalProvider>
+        // --- FIN DE MODIFICACIÓN ---
     );
 }
 export default App;

@@ -24,6 +24,7 @@ import { UserPayload } from './types/express';
 import { initializeSocketManager } from './socketManager';
 import notificationRoutes from './api/notificationRoutes';
 import statsRoutes from './api/statsRoutes';
+import { CategoriaNotificacion } from '@prisma/client';
 
 dotenv.config();
 
@@ -175,6 +176,28 @@ io.on('connection', (socket: Socket) => {
         socket.emit('welcome_message', `¡Bienvenido ${connectedUser.name || 'usuario'}! Estás conectado al servidor de notificaciones.`);
         socket.join(connectedUser.id.toString());
         console.log(`[Socket.IO] Usuario ID: ${connectedUser.id} unido a la sala personal: ${connectedUser.id.toString()}`);
+
+        // --- Listener para pedir contadores iniciales ---
+        socket.on('request_initial_counts', async () => {
+            if (connectedUser) {
+                console.log(`[Socket.IO] Usuario ${connectedUser.id} solicitó contadores iniciales.`);
+                try {
+                    const [systemCount, chatCount] = await Promise.all([
+                        prisma.notificacion.count({
+                            where: { usuarioId: connectedUser.id, leida: false, categoria: CategoriaNotificacion.SISTEMA }
+                        }),
+                        prisma.notificacion.count({
+                            where: { usuarioId: connectedUser.id, leida: false, categoria: CategoriaNotificacion.CHAT }
+                        })
+                    ]);
+                    // Se emite el evento solo a este socket que lo pidió
+                    socket.emit('unread_count_updated', { systemCount, chatCount });
+                } catch (error) {
+                    console.error(`[Socket.IO] Error al obtener contadores iniciales para usuario ${connectedUser.id}:`, error);
+                }
+            }
+        });
+        // --- Fin: istener para pedir contadores iniciales ---
 
         socket.on('join_task_chat_room', (taskId: string | number) => {
             if (taskId && connectedUser) {
