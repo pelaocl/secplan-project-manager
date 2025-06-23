@@ -13,7 +13,7 @@ interface TaskListItemProps {
   onViewDetails: (taskId: number) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: number) => void;
-  // onUpdateTaskStatus: (taskId: number, newStatus: EstadoTarea) => void; // Futura prop
+  onUpdateTaskStatus: (taskId: number, newStatus: EstadoTarea) => void;
 }
 
 // Helpers para colores (sin cambios)
@@ -36,7 +36,7 @@ export const getPrioridadTareaColor = (prioridad?: PrioridadTarea): "default" | 
     }
 };
 
-const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails, onEditTask, onDeleteTask }) => {
+const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails, onEditTask, onDeleteTask, onUpdateTaskStatus }) => {
   const theme = useTheme();
   const currentUser = useCurrentUser();
   const currentUserRole = useCurrentUserRole();
@@ -48,8 +48,15 @@ const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails, onEdit
 
   const canDeleteThisTask = React.useMemo(() => { 
     if (!currentUser) return false;
-    return currentUserRole === 'ADMIN' || currentUserRole === 'COORDINADOR';
-  }, [currentUser, currentUserRole]);
+    if (currentUserRole === 'ADMIN' || currentUserRole === 'COORDINADOR') {
+        return true;
+    }
+    // La regla: El proyectista del proyecto puede eliminar tareas creadas por él.
+    if (task.proyecto?.proyectistaId === currentUser.id && task.creadorId === currentUser.id) {
+        return true;
+    }
+    return false;
+  }, [currentUser, currentUserRole, task.creadorId, task.proyecto?.proyectistaId]);
   
   const canChangeStatus = canEditThisTask; 
 
@@ -61,7 +68,10 @@ const TaskListItem: React.FC<TaskListItemProps> = ({ task, onViewDetails, onEdit
   const openMoreMenu = Boolean(anchorElMore);
   const handleMoreClick = (event: React.MouseEvent<HTMLElement>) => { event.stopPropagation(); setAnchorElMore(event.currentTarget); };
   const handleMoreClose = (event?: React.MouseEvent) => { event?.stopPropagation(); setAnchorElMore(null); };
-  const handleChangeStatus = (newStatus: EstadoTarea) => { console.log(`TODO: Cambiar estado de tarea ${task.id} a ${newStatus}`); alert(`Cambiar estado a ${newStatus} - Funcionalidad Pendiente`); handleMoreClose(); };
+  const handleChangeStatus = (newStatus: EstadoTarea) => {
+    onUpdateTaskStatus(task.id, newStatus);
+    handleMoreClose();
+  };
   
   return (
     <Paper 

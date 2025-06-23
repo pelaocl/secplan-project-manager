@@ -104,6 +104,7 @@ function ProjectDetailPage() {
     const [isTaskDetailModalOpen, setIsTaskDetailModalOpen] = useState(false);
     const [loadingTaskDetail, setLoadingTaskDetail] = useState<boolean>(false);
     const [taskDetailErrorState, setTaskDetailErrorState] = useState<string | null>(null);
+    const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
     const isAuthenticated = useIsAuthenticated();
     const userRole = useCurrentUserRole();
@@ -268,9 +269,46 @@ function ProjectDetailPage() {
     const handleOpenEditTaskModal = async (taskToEdit: Task) => { if (!project || !lookupOptions || !isAuthenticated) return; setLoadingTaskDetail(true); try { const freshTask = await taskApi.getTaskById(project.id, taskToEdit.id); taskFormMethods.reset({ titulo: freshTask.titulo, descripcion: freshTask.descripcion || null, asignadoId: freshTask.asignadoId || null, fechaPlazo: freshTask.fechaPlazo ? new Date(freshTask.fechaPlazo) : null, prioridad: freshTask.prioridad || null, estado: freshTask.estado, }); setEditingTask(freshTask); setIsEditTaskModalOpen(true); setTaskFormError(null); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al cargar tarea para editar."; setSnackbarMessage(errorMsg); } finally { setLoadingTaskDetail(false); } };
     const handleCloseEditTaskModal = () => { setIsEditTaskModalOpen(false); setEditingTask(null); };
     const onEditTaskSubmit: SubmitHandler<TaskFormValues> = async (data) => { if (!project || !editingTask || !isAuthenticated) return; setIsSubmittingTask(true); setTaskFormError(null); try { const dataToSubmit: UpdateTaskFrontendInput = { ...data, fechaPlazo: data.fechaPlazo ? new Date(data.fechaPlazo).toISOString() : null, }; await taskApi.updateTask(project.id, editingTask.id, dataToSubmit); setSnackbarMessage("¡Tarea actualizada exitosamente!"); handleCloseEditTaskModal(); loadPageData(false); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al actualizar la tarea."; setTaskFormError(errorMsg); } finally { setIsSubmittingTask(false); } };
-    const handleDeleteTask = (taskId: number) => { console.log(`TODO: Confirmar para eliminar tarea ID: ${taskId} del proyecto ${projectIdNum}`); alert(`Eliminar tarea ${taskId} - Pendiente confirmación`); };
     const handleViewTaskDetails = async (taskId: number) => { if (!project || isNaN(projectIdNum) || !isAuthenticated) return; setLoadingTaskDetail(true); setTaskDetailErrorState(null); try { const detailedTask = await taskApi.getTaskById(projectIdNum, taskId); setSelectedTaskForDetail(detailedTask); setIsTaskDetailModalOpen(true); } catch (err) { const errorMsg = err instanceof Error ? err.message : "Error al cargar detalles."; setTaskDetailErrorState(errorMsg); setSnackbarMessage(errorMsg); } finally { setLoadingTaskDetail(false); } };
-    
+    const handleDeleteTask = (task: Task) => {
+        setTaskToDelete(task); // Guarda la tarea que se va a eliminar para mostrarla en el diálogo
+    };
+    const handleConfirmDelete = async () => {
+        if (!taskToDelete || !project) return;
+
+        try {
+        await taskApi.deleteTask(project.id, taskToDelete.id);
+        
+        // Si la eliminación es exitosa, actualizamos el estado para quitar la tarea de la lista
+        setTasks(currentTasks => currentTasks.filter(t => t.id !== taskToDelete.id));
+        
+        // Opcional: mostrar una notificación de éxito (snackbar)
+        // showSnackbar('Tarea eliminada con éxito', 'success');
+
+        } catch (error) {
+        console.error("Error al eliminar la tarea:", error);
+        // Opcional: mostrar una notificación de error
+        // showSnackbar('No se pudo eliminar la tarea', 'error');
+        } finally {
+        setTaskToDelete(null); // Cierra el diálogo de confirmación
+        }
+    };
+
+    const handleUpdateTaskStatus = async (taskId: number, newStatus: EstadoTarea) => {
+        if (!project) return;
+        
+        try {
+            const updatedTaskData = await taskApi.updateTask(project.id, taskId, { estado: newStatus });
+            
+            // Actualizamos la tarea en la lista con la nueva información del backend
+            setTasks(currentTasks => 
+                currentTasks.map(t => t.id === taskId ? { ...t, ...updatedTaskData } : t)
+            );
+
+        } catch (error) {
+            console.error("Error al actualizar el estado de la tarea:", error);
+        }
+    };
 
     // --- Estados de Carga y Error Globales ---
     if (loadingProject && !project && !errorProject) {
@@ -554,8 +592,18 @@ function ProjectDetailPage() {
                         {errorTasks && <Alert severity="warning">No se pudo cargar la bitácora de tareas: {errorTasks}</Alert>}
                         {!loadingTasks && !errorTasks && ( 
                             filteredTasks.length > 0 ? ( 
-                                <List disablePadding>{filteredTasks.map((task) => ( <TaskListItem key={task.id} task={task} onViewDetails={() => handleViewTaskDetails(task.id)} onEditTask={handleOpenEditTaskModal} onDeleteTask={handleDeleteTask} />))}</List>
-                            ) : (
+                                <List disablePadding>
+                                {filteredTasks.map((task) => ( 
+                                    <TaskListItem 
+                                    key={task.id} 
+                                    task={task} 
+                                    onViewDetails={() => handleViewTaskDetails(task.id)} 
+                                    onEditTask={handleOpenEditTaskModal} 
+                                    onDeleteTask={() => handleDeleteTask(task)} // Pasamos la tarea completa
+                                    onUpdateTaskStatus={handleUpdateTaskStatus} // Pasamos la nueva función
+                                    />
+                                ))}
+                                </List>                            ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py: 2}}>No hay tareas registradas para el filtro actual.</Typography>
                             )
                         )}
@@ -781,7 +829,8 @@ function ProjectDetailPage() {
         </Box>
     );
 
-    return (
+     return (
+        
         <Container
             maxWidth="xl" // O el maxWidth que hayas elegido
             sx={{
@@ -847,6 +896,29 @@ function ProjectDetailPage() {
                     onClose={() => { setIsTaskDetailModalOpen(false); setSelectedTaskForDetail(null); }}
                 />
             )}
+
+            <Dialog
+                open={!!taskToDelete}
+                onClose={() => setTaskToDelete(null)}
+                aria-labelledby="alert-dialog-title"
+                aria-describedby="alert-dialog-description"
+            >
+                <DialogTitle id="alert-dialog-title">
+                ¿Confirmar Eliminación?
+                </DialogTitle>
+                <DialogContent>
+                <DialogContentText id="alert-dialog-description">
+                    ¿Estás seguro de que deseas eliminar la tarea "{taskToDelete?.titulo}"? Esta acción no se puede deshacer.
+                </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                <Button onClick={() => setTaskToDelete(null)}>Cancelar</Button>
+                <Button onClick={handleConfirmDelete} color="error" autoFocus>
+                    Eliminar
+                </Button>
+                </DialogActions>
+            </Dialog>
+
             <Snackbar
                 open={!!snackbarMessage || !!taskDetailErrorState}
                 autoHideDuration={6000}
